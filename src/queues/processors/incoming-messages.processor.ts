@@ -22,6 +22,7 @@ interface IncomingMessageJobData {
 })
 export class IncomingMessagesProcessor extends WorkerHost {
   private readonly logger = new Logger(IncomingMessagesProcessor.name);
+  private readonly assignmentWindowMs = 24 * 60 * 60 * 1000; // 24 hours
 
   constructor(
     private prisma: PrismaService,
@@ -29,6 +30,43 @@ export class IncomingMessagesProcessor extends WorkerHost {
     private eventsGateway: EventsGateway,
   ) {
     super();
+  }
+
+  private parseTimestamp(timestamp: string): Date {
+    if (!timestamp) {
+      return new Date();
+    }
+
+    const numeric = Number.parseInt(timestamp, 10);
+    if (!Number.isNaN(numeric)) {
+      // Meta timestamps are seconds
+      return new Date(numeric * 1000);
+    }
+
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return new Date();
+    }
+
+    return date;
+  }
+
+  private segmentsMatch(
+    operatorSegments: string[] | null | undefined,
+    targetSegments: string[] | null | undefined,
+  ): boolean {
+    const operatorList = operatorSegments ?? [];
+    const targetList = targetSegments ?? [];
+
+    if (targetList.length === 0) {
+      return true;
+    }
+
+    if (operatorList.length === 0) {
+      return true;
+    }
+
+    return operatorList.some((segment) => targetList.includes(segment));
   }
 
   async process(job: Job<IncomingMessageJobData>): Promise<void> {
@@ -59,6 +97,9 @@ export class IncomingMessagesProcessor extends WorkerHost {
         throw new Error(`Number not found: ${phoneNumberId}`);
       }
 
+      const messageDate = this.parseTimestamp(timestamp);
+      const now = new Date();
+
       // Find or create conversation (TRANSBORDO LOGIC)
       let conversation = await this.prisma.conversation.findFirst({
         where: {
@@ -72,53 +113,123 @@ export class IncomingMessagesProcessor extends WorkerHost {
       });
 
       let isNewConversation = false;
+      let operatorChanged = false;
+      let assignedOperatorId: string | null = conversation?.operatorId ?? null;
+
+      if (conversation?.operatorId) {
+        const withinWindow =
+          conversation.lastAssignedAt &&
+          now.getTime() - conversation.lastAssignedAt.getTime() < this.assignmentWindowMs;
+
+        const operatorPresence = await this.prisma.operatorPresence.findUnique({
+          where: { operatorId: conversation.operatorId },
+        });
+
+        if (!withinWindow || !operatorPresence?.isOnline) {
+          this.logger.log(
+            `Releasing conversation ${conversation.id} from operator ${conversation.operatorId} (windowExpired=${!withinWindow}, operatorOnline=${operatorPresence?.isOnline})`,
+          );
+          assignedOperatorId = null;
+          operatorChanged = true;
+        } else {
+          await this.prisma.operatorPresence.update({
+            where: { operatorId: conversation.operatorId },
+            data: {
+              lastAssignedAt: now,
+            },
+          });
+        }
+      }
 
       if (!conversation) {
         // NEW CONVERSATION - TRIGGER TRANSBORDO (DISTRIBUTION LOGIC)
         this.logger.log(`New conversation detected from ${from}, triggering transbordo`);
         isNewConversation = true;
+      }
 
-        // Find operator with least active conversations (round-robin strategy)
-        const operatorWithLeastConversations = await this.prisma.operator.findFirst({
+      if (!assignedOperatorId) {
+        const presences = await this.prisma.operatorPresence.findMany({
           where: {
-            isActive: true,
-          },
-          orderBy: {
-            conversations: {
-              _count: 'asc',
-            },
+            isOnline: true,
           },
           include: {
-            _count: {
-              select: {
-                conversations: {
-                  where: {
-                    status: 'OPEN',
+            operator: {
+              include: {
+                _count: {
+                  select: {
+                    conversations: {
+                      where: {
+                        status: 'OPEN',
+                      },
+                    },
                   },
                 },
               },
             },
           },
+          orderBy: [
+            { lastAssignedAt: 'asc' },
+            { startedAt: 'asc' },
+          ],
         });
 
-        if (!operatorWithLeastConversations) {
+        const candidate = presences.find((presence) => {
+          if (!presence.operator || !presence.operator.isActive) {
+            return false;
+          }
+
+          const queueMatches =
+            !number.queueKey ||
+            !presence.queueKey ||
+            presence.queueKey === number.queueKey;
+
+          if (!queueMatches) {
+            return false;
+          }
+
+          const numberMatches =
+            !presence.numberId || presence.numberId === number.id;
+
+          if (!numberMatches) {
+            return false;
+          }
+
+          const segmentsMatch = this.segmentsMatch(
+            presence.segments,
+            number.segments,
+          );
+
+          if (!segmentsMatch) {
+            return false;
+          }
+
+          const openCount =
+            presence.operator._count?.conversations ?? 0;
+
+          return (
+            openCount < presence.operator.maxConcurrent
+          );
+        });
+
+        if (candidate) {
+          assignedOperatorId = candidate.operatorId;
+          await this.prisma.operatorPresence.update({
+            where: { operatorId: candidate.operatorId },
+            data: {
+              lastAssignedAt: now,
+              lastHeartbeat: now,
+            },
+          });
+
+          if (conversation && conversation.operatorId !== candidate.operatorId) {
+            operatorChanged = true;
+          }
+        } else {
           this.logger.warn('No active operators available, creating unassigned conversation');
         }
+      }
 
-        // Check if operator is below max concurrent limit
-        let assignedOperatorId: string | null = null;
-        if (operatorWithLeastConversations) {
-          const openCount = operatorWithLeastConversations._count.conversations;
-          if (openCount < operatorWithLeastConversations.maxConcurrent) {
-            assignedOperatorId = operatorWithLeastConversations.id;
-          } else {
-            this.logger.warn(
-              `Operator ${operatorWithLeastConversations.name} is at max capacity (${openCount}/${operatorWithLeastConversations.maxConcurrent})`,
-            );
-          }
-        }
-
-        // Create new conversation
+      if (!conversation) {
         conversation = await this.prisma.conversation.create({
           data: {
             customerPhone: from,
@@ -126,7 +237,8 @@ export class IncomingMessagesProcessor extends WorkerHost {
             numberId: number.id,
             operatorId: assignedOperatorId,
             status: 'OPEN',
-            lastMessageAt: new Date(parseInt(timestamp) * 1000),
+            lastMessageAt: messageDate,
+            lastAssignedAt: assignedOperatorId ? now : null,
           },
           include: {
             operator: true,
@@ -137,13 +249,27 @@ export class IncomingMessagesProcessor extends WorkerHost {
           `Created conversation ${conversation.id} for ${from}, assigned to operator: ${conversation.operator?.name || 'UNASSIGNED'}`,
         );
       } else {
-        // Update last message timestamp
-        await this.prisma.conversation.update({
+        conversation = await this.prisma.conversation.update({
           where: { id: conversation.id },
           data: {
-            lastMessageAt: new Date(parseInt(timestamp) * 1000),
+            lastMessageAt: messageDate,
+            operatorId: assignedOperatorId,
+            lastAssignedAt: assignedOperatorId ? now : null,
+          },
+          include: {
+            operator: true,
           },
         });
+
+        if (operatorChanged) {
+          this.logger.log(
+            `Conversation ${conversation.id} reassigned to operator ${conversation.operator?.name || 'UNASSIGNED'}`,
+          );
+        }
+      }
+
+      if (assignedOperatorId && operatorChanged) {
+        isNewConversation = true;
       }
 
       // Save message to database
@@ -158,7 +284,7 @@ export class IncomingMessagesProcessor extends WorkerHost {
           content,
           fromPhone: from,
           toPhone: to,
-          timestamp: new Date(parseInt(timestamp) * 1000),
+          timestamp: messageDate,
         },
       });
 
@@ -175,6 +301,7 @@ export class IncomingMessagesProcessor extends WorkerHost {
               customerName: conversation.customerName,
               status: conversation.status,
               createdAt: conversation.createdAt,
+              lastAssignedAt: conversation.lastAssignedAt,
             },
             message: savedMessage,
           });
@@ -185,6 +312,11 @@ export class IncomingMessagesProcessor extends WorkerHost {
             message: savedMessage,
           });
         }
+      } else {
+        this.eventsGateway.emitToAllOperators('conversation:unassigned', {
+          conversationId: conversation.id,
+          message: savedMessage,
+        });
       }
 
       this.logger.debug(`Successfully processed incoming message ${messageId}`);

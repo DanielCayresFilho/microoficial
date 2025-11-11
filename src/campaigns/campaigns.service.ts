@@ -80,6 +80,9 @@ export class CampaignsService {
         csvFilePath: '', // Will be updated after CSV upload
         rateLimit: dto.rateLimit || 50,
         status: 'PENDING',
+        queueKey: dto.queueKey ?? number.queueKey ?? null,
+        originUrl: dto.originUrl ?? null,
+        segments: dto.segments ?? number.segments ?? [],
       },
       include: {
         template: true,

@@ -25,4 +25,16 @@ export class CreateCampaignDto {
   @IsOptional()
   @Min(1)
   rateLimit?: number; // Messages per minute
+
+  @IsString()
+  @IsOptional()
+  queueKey?: string;
+
+  @IsString()
+  @IsOptional()
+  originUrl?: string;
+
+  @IsString({ each: true })
+  @IsOptional()
+  segments?: string[];
 }

@@ -61,6 +61,13 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (socketId === client.id) {
         this.operatorSockets.delete(operatorId);
         this.logger.log(`Operator ${operatorId} disconnected`);
+        await this.prisma.operatorPresence.updateMany({
+          where: { operatorId },
+          data: {
+            isOnline: false,
+            expiresAt: new Date(),
+          },
+        });
         break;
       }
     }
@@ -117,6 +124,13 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.operatorSockets.delete(operatorId);
     client.leave(`operator:${operatorId}`);
     this.logger.log(`Operator ${operatorId} left`);
+    await this.prisma.operatorPresence.updateMany({
+      where: { operatorId },
+      data: {
+        isOnline: false,
+        expiresAt: new Date(),
+      },
+    });
   }
 
   @SubscribeMessage('conversation:typing')

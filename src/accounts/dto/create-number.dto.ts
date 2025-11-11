@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsBoolean, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsBoolean,
+  IsOptional,
+  IsArray,
+} from 'class-validator';
 
 export class CreateNumberDto {
   @IsString()
@@ -24,4 +30,13 @@ export class CreateNumberDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  queueKey?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  segments?: string[];
 }

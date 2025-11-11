@@ -135,9 +135,18 @@ export class AccountsService {
       throw new ConflictException('Phone number ID already registered');
     }
 
+    const segments = dto.segments ?? [];
+
     return this.prisma.number.create({
       data: {
-        ...dto,
+        phoneNumber: dto.phoneNumber,
+        phoneNumberId: dto.phoneNumberId,
+        displayName: dto.displayName,
+        qualityRating: dto.qualityRating,
+        verifiedName: dto.verifiedName,
+        isActive: dto.isActive ?? true,
+        queueKey: dto.queueKey ?? null,
+        segments,
         accountId,
       },
     });
@@ -169,9 +178,22 @@ export class AccountsService {
       throw new NotFoundException('Number not found');
     }
 
+    const updateData: Partial<CreateNumberDto> & {
+      segments?: string[];
+      queueKey?: string | null;
+    } = { ...dto };
+
+    if (dto.queueKey === '') {
+      updateData.queueKey = null;
+    }
+
+    if (dto.segments) {
+      updateData.segments = dto.segments;
+    }
+
     return this.prisma.number.update({
       where: { id: numberId },
-      data: dto,
+      data: updateData,
     });
   }
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { OperatorsService } from '../operators/operators.service';
 
 @Injectable()
 export class SchedulerService {
@@ -11,6 +12,7 @@ export class SchedulerService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private operatorsService: OperatorsService,
   ) {
     this.autoCloseHours = this.configService.get<number>(
       'CONVERSATION_AUTO_CLOSE_HOURS',
@@ -152,6 +154,23 @@ export class SchedulerService {
     } catch (error) {
       this.logger.error(
         `Error cleaning up webhook events: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async expireOperatorSessions() {
+    this.logger.log('Checking operator presences');
+    try {
+      const expiredCount =
+        await this.operatorsService.expireStalePresences();
+      if (expiredCount > 0) {
+        this.logger.log(`Marked ${expiredCount} operator presences as offline`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error expiring operator presences: ${error.message}`,
         error.stack,
       );
     }

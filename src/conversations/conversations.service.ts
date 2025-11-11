@@ -101,10 +101,21 @@ export class ConversationsService {
       });
 
       // Update conversation lastMessageAt
+      const now = new Date();
       await this.prisma.conversation.update({
         where: { id: conversationId },
-        data: { lastMessageAt: new Date() },
+        data: {
+          lastMessageAt: now,
+          lastAssignedAt: now,
+        },
       });
+
+      if (conversation.operatorId) {
+        await this.prisma.operatorPresence.updateMany({
+          where: { operatorId: conversation.operatorId },
+          data: { lastAssignedAt: now },
+        });
+      }
 
       this.logger.log(`Message sent to conversation ${conversationId}: ${messageId}`);
 
@@ -196,13 +207,25 @@ export class ConversationsService {
     }
 
     // Assign operator
-    return this.prisma.conversation.update({
+    const now = new Date();
+
+    const updatedConversation = await this.prisma.conversation.update({
       where: { id: conversationId },
-      data: { operatorId },
+      data: {
+        operatorId,
+        lastAssignedAt: now,
+      },
       include: {
         operator: true,
       },
     });
+
+    await this.prisma.operatorPresence.updateMany({
+      where: { operatorId },
+      data: { lastAssignedAt: now },
+    });
+
+    return updatedConversation;
   }
 
   async getConversationStats() {
