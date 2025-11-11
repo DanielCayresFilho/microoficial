@@ -302,6 +302,7 @@ export class IncomingMessagesProcessor extends WorkerHost {
               status: conversation.status,
               createdAt: conversation.createdAt,
               lastAssignedAt: conversation.lastAssignedAt,
+              operatorId: conversation.operatorId,
             },
             message: savedMessage,
           });
@@ -309,6 +310,7 @@ export class IncomingMessagesProcessor extends WorkerHost {
           // Notify operator about new message in existing conversation
           this.eventsGateway.emitToOperator(conversation.operatorId, 'new_message', {
             conversationId: conversation.id,
+            operatorId: conversation.operatorId,
             message: savedMessage,
           });
         }
