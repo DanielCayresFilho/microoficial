@@ -56,12 +56,6 @@ export class CampaignsController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10MB
-          new FileTypeValidator({
-            fileType: /^text\/csv$/i,
-          }),
-          new FileTypeValidator({
-            fileType: /^application\/vnd\.ms-excel$/i,
-          }),
         ],
       }),
     )
@@ -69,6 +63,18 @@ export class CampaignsController {
   ) {
     if (!file) {
       throw new BadRequestException('CSV file is required');
+    }
+
+    const allowedMimeTypes = [
+      'text/csv',
+      'application/vnd.ms-excel',
+      'text/plain',
+    ];
+
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException(
+        `Invalid file type: ${file.mimetype}. Please upload a CSV file.`,
+      );
     }
 
     return this.campaignsService.uploadCsvAndStartCampaign(
