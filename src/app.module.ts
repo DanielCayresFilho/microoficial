@@ -17,6 +17,7 @@ import { ConversationsModule } from './conversations/conversations.module';
 import { TabulationsModule } from './tabulations/tabulations.module';
 import { OperatorsModule } from './operators/operators.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { TemplatesModule } from './templates/templates.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     TabulationsModule,
     OperatorsModule,
     SchedulerModule,
+    TemplatesModule,
   ],
   controllers: [AppController],
   providers: [

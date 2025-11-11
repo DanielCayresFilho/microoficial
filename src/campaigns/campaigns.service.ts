@@ -45,6 +45,14 @@ export class CampaignsService {
       throw new NotFoundException('Number not found');
     }
 
+    if (number.accountId !== dto.accountId) {
+      throw new BadRequestException('Selected number does not belong to the provided account');
+    }
+
+    if (template.numberId && template.numberId !== dto.numberId) {
+      throw new BadRequestException('Template is not linked to the selected number');
+    }
+
     return this.prisma.campaign.create({
       data: {
         name: dto.name,

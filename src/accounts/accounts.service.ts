@@ -29,7 +29,15 @@ export class AccountsService {
   async findAllAccounts() {
     return this.prisma.account.findMany({
       include: {
-        numbers: true,
+        numbers: {
+          include: {
+            _count: {
+              select: {
+                templates: true,
+              },
+            },
+          },
+        },
         _count: {
           select: {
             campaigns: true,
@@ -44,7 +52,15 @@ export class AccountsService {
     const account = await this.prisma.account.findUnique({
       where: { id },
       include: {
-        numbers: true,
+        numbers: {
+          include: {
+            _count: {
+              select: {
+                templates: true,
+              },
+            },
+          },
+        },
         campaigns: {
           orderBy: { createdAt: 'desc' },
           take: 10,
@@ -79,7 +95,15 @@ export class AccountsService {
       where: { id },
       data: dto,
       include: {
-        numbers: true,
+        numbers: {
+          include: {
+            _count: {
+              select: {
+                templates: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -126,6 +150,7 @@ export class AccountsService {
       include: {
         _count: {
           select: {
+            templates: true,
             conversations: true,
             messages: true,
           },
