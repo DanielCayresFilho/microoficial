@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Business Manager Account
+model Account {
+  id          String   @id @default(uuid())
+  name        String
+  businessId  String   @unique // WhatsApp Business Manager ID
+  accessToken String   @db.Text // Meta API Access Token
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  numbers   Number[]
+  campaigns Campaign[]
+
+  @@map("accounts")
+}
+
+// WhatsApp Phone Numbers
+model Number {
+  id              String   @id @default(uuid())
+  phoneNumber     String   @unique // Format: +5511999999999
+  phoneNumberId   String   @unique // WhatsApp Phone Number ID from Meta
+  displayName     String?
+  qualityRating   String? // HIGH, MEDIUM, LOW
+  verifiedName    String?
+  isActive        Boolean  @default(true)
+  accountId       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  account       Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  campaigns     Campaign[]
+  conversations Conversation[]
+  messages      Message[]
+
+  @@map("numbers")
+}
+
+// Operators (Agents)
+model Operator {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  isActive      Boolean  @default(true)
+  maxConcurrent Int      @default(5) // Max concurrent conversations
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  conversations Conversation[]
+
+  @@map("operators")
+}
+
+// Message Templates (WhatsApp Approved Templates)
+model Template {
+  id           String   @id @default(uuid())
+  name         String
+  language     String   @default("pt_BR")
+  category     String // MARKETING, UTILITY, AUTHENTICATION
+  templateId   String   @unique // WhatsApp Template ID
+  status       String // APPROVED, PENDING, REJECTED
+  components   Json // Template structure (header, body, footer, buttons)
+  variables    String[] // Variable placeholders like {{1}}, {{2}}
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaigns Campaign[]
+
+  @@map("templates")
+}
+
+// Campaigns (Bulk Message Sending)
+model Campaign {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  templateId        String
+  accountId         String
+  numberId          String
+  csvFilePath       String // Path to uploaded CSV file
+  totalRecipients   Int      @default(0)
+  sentCount         Int      @default(0)
+  deliveredCount    Int      @default(0)
+  readCount         Int      @default(0)
+  failedCount       Int      @default(0)
+  status            String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  rateLimit         Int      @default(50) // Messages per minute
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  template Template @relation(fields: [templateId], references: [id])
+  account  Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  number   Number   @relation(fields: [numberId], references: [id])
+
+  @@map("campaigns")
+}
+
+// Conversations (Chat Sessions)
+model Conversation {
+  id              String    @id @default(uuid())
+  customerPhone   String // Customer's phone number
+  customerName    String?
+  numberId        String // WhatsApp number handling this conversation
+  operatorId      String? // Assigned operator
+  status          String    @default("OPEN") // OPEN, CLOSED, PENDING_CLOSURE
+  tabulationId    String? // Closure categorization
+  notes           String? // Operator notes
+  lastMessageAt   DateTime  @default(now())
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  number      Number      @relation(fields: [numberId], references: [id])
+  operator    Operator?   @relation(fields: [operatorId], references: [id])
+  tabulation  Tabulation? @relation(fields: [tabulationId], references: [id])
+  messages    Message[]
+
+  @@index([customerPhone, numberId])
+  @@index([operatorId])
+  @@index([status])
+  @@map("conversations")
+}
+
+// Messages (Individual Messages)
+model Message {
+  id              String    @id @default(uuid())
+  conversationId  String?
+  numberId        String
+  messageId       String?   @unique // WhatsApp Message ID
+  wamid           String?   @unique // WhatsApp Message ID (alternative format)
+  direction       String // INBOUND, OUTBOUND
+  type            String // text, image, video, audio, document, template, location
+  content         Json // Message content (varies by type)
+  status          String?   @default("SENT") // SENT, DELIVERED, READ, FAILED (for outbound)
+  fromPhone       String // Sender phone number
+  toPhone         String // Recipient phone number
+  timestamp       DateTime  @default(now())
+  errorCode       String?
+  errorMessage    String?
+  metadata        Json? // Additional metadata
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  number       Number        @relation(fields: [numberId], references: [id])
+
+  @@index([conversationId])
+  @@index([messageId])
+  @@index([fromPhone])
+  @@index([timestamp])
+  @@map("messages")
+}
+
+// Tabulations (Conversation Categories)
+model Tabulation {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  description   String?
+  requiresNotes Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  conversations Conversation[]
+
+  @@map("tabulations")
+}
+
+// Webhook Events Log (for debugging)
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  eventType   String // message, status, etc.
+  payload     Json
+  processed   Boolean  @default(false)
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([processed])
+  @@index([createdAt])
+  @@map("webhook_events")
+}

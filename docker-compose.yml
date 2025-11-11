@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: whatsapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: whatsapp_microservice
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - whatsapp-network
+
+  # Redis for BullMQ
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - whatsapp-network
+
+  # NestJS Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whatsapp-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/whatsapp_microservice?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      WHATSAPP_API_VERSION: v21.0
+      WHATSAPP_API_BASE_URL: https://graph.facebook.com
+      META_APP_ID: ${META_APP_ID:-your_meta_app_id_here}
+      META_APP_SECRET: ${META_APP_SECRET:-your_meta_app_secret_here}
+      WEBHOOK_VERIFY_TOKEN: ${WEBHOOK_VERIFY_TOKEN:-your_secret_token_here}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-http://localhost:3000/api/auth/whatsapp/callback}
+      BULLMQ_DEFAULT_JOB_ATTEMPTS: 3
+      BULLMQ_DEFAULT_JOB_TIMEOUT: 60000
+      DEFAULT_RATE_LIMIT_PER_MINUTE: 50
+      CONVERSATION_AUTO_CLOSE_HOURS: 24
+      MAX_FILE_SIZE_MB: 10
+      UPLOAD_DIR: ./uploads
+      API_KEY: ${API_KEY:-your_secret_api_key_here}
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - whatsapp-network
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        node dist/main.js
+      "
+
+  # BullMQ Board (Optional - for monitoring queues)
+  bullmq-board:
+    image: deadly0/bull-board:latest
+    container_name: whatsapp-bullmq-board
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      BULL_PREFIX: bull
+    depends_on:
+      - redis
+    networks:
+      - whatsapp-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  whatsapp-network:
+    driver: bridge

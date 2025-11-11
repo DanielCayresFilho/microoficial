@@ -1,0 +1,390 @@
+{
+  "info": {
+    "name": "WhatsApp Microservice API",
+    "description": "Complete API collection for WhatsApp Telemarketing Microservice",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth - Embedded Signup",
+      "item": [
+        {
+          "name": "Get OAuth URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/whatsapp",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "whatsapp"]
+            }
+          }
+        },
+        {
+          "name": "List Available WABAs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/whatsapp/accounts?accessToken=YOUR_TOKEN",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "whatsapp", "accounts"],
+              "query": [
+                {
+                  "key": "accessToken",
+                  "value": "YOUR_TOKEN"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Manual Setup WABA",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/whatsapp/setup?wabaId=123456789&accessToken=YOUR_TOKEN&accountName=My Business",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "whatsapp", "setup"],
+              "query": [
+                {
+                  "key": "wabaId",
+                  "value": "123456789"
+                },
+                {
+                  "key": "accessToken",
+                  "value": "YOUR_TOKEN"
+                },
+                {
+                  "key": "accountName",
+                  "value": "My Business"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Debug Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/whatsapp/debug?accessToken=YOUR_TOKEN",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "whatsapp", "debug"],
+              "query": [
+                {
+                  "key": "accessToken",
+                  "value": "YOUR_TOKEN"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Create Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Business Account\",\n  \"businessId\": \"123456789\",\n  \"accessToken\": \"YOUR_ACCESS_TOKEN\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/accounts",
+              "host": ["{{base_url}}"],
+              "path": ["accounts"]
+            }
+          }
+        },
+        {
+          "name": "List Accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/accounts",
+              "host": ["{{base_url}}"],
+              "path": ["accounts"]
+            }
+          }
+        },
+        {
+          "name": "Get Account by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/accounts/:id",
+              "host": ["{{base_url}}"],
+              "path": ["accounts", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Add Phone Number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"+5511999999999\",\n  \"phoneNumberId\": \"123456789\",\n  \"displayName\": \"My Business Number\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/accounts/:id/numbers",
+              "host": ["{{base_url}}"],
+              "path": ["accounts", ":id", "numbers"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Operators",
+      "item": [
+        {
+          "name": "Create Operator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"João Silva\",\n  \"email\": \"joao@example.com\",\n  \"isActive\": true,\n  \"maxConcurrent\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/operators",
+              "host": ["{{base_url}}"],
+              "path": ["operators"]
+            }
+          }
+        },
+        {
+          "name": "List Operators",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/operators",
+              "host": ["{{base_url}}"],
+              "path": ["operators"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tabulations",
+      "item": [
+        {
+          "name": "Create Tabulation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Venda Realizada\",\n  \"description\": \"Cliente comprou o produto\",\n  \"requiresNotes\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tabulations",
+              "host": ["{{base_url}}"],
+              "path": ["tabulations"]
+            }
+          }
+        },
+        {
+          "name": "List Tabulations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tabulations",
+              "host": ["{{base_url}}"],
+              "path": ["tabulations"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campaigns",
+      "item": [
+        {
+          "name": "Create Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Black Friday 2025\",\n  \"description\": \"Promoção especial\",\n  \"templateId\": \"template-uuid\",\n  \"accountId\": \"account-uuid\",\n  \"numberId\": \"number-uuid\",\n  \"rateLimit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/campaigns",
+              "host": ["{{base_url}}"],
+              "path": ["campaigns"]
+            }
+          }
+        },
+        {
+          "name": "Upload CSV and Start",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/path/to/campaign.csv"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/campaigns/:id/upload-csv",
+              "host": ["{{base_url}}"],
+              "path": ["campaigns", ":id", "upload-csv"]
+            }
+          }
+        },
+        {
+          "name": "Get Campaign Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/campaigns/:id/stats",
+              "host": ["{{base_url}}"],
+              "path": ["campaigns", ":id", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "List Conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/conversations?status=OPEN",
+              "host": ["{{base_url}}"],
+              "path": ["conversations"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "OPEN"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Conversation by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/conversations/:id",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Olá! Como posso ajudar?\",\n  \"previewUrl\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/conversations/:id/messages",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":id", "messages"]
+            }
+          }
+        },
+        {
+          "name": "Close Conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tabulationId\": \"tabulation-uuid\",\n  \"notes\": \"Cliente comprou produto X\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/conversations/:id/close",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":id", "close"]
+            }
+          }
+        },
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/conversations/stats",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", "stats"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
