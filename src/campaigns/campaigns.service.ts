@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { QUEUE_NAMES, JOB_NAMES } from '../queues/queue.constants';
 import * as fs from 'fs';
+import { promises as fsp } from 'fs';
 import csvParser from 'csv-parser';
 import * as path from 'path';
 
@@ -16,6 +17,22 @@ export class CampaignsService {
     private prisma: PrismaService,
     @InjectQueue(QUEUE_NAMES.CAMPAIGN_MESSAGES) private campaignQueue: Queue,
   ) {}
+
+  private async removeCampaignJobs(campaignId: string) {
+    const jobs = await this.campaignQueue.getJobs(['waiting', 'delayed', 'active']);
+
+    for (const job of jobs) {
+      if (job?.data?.campaignId === campaignId) {
+        try {
+          await job.remove();
+        } catch (error) {
+          this.logger.warn(
+            `Failed to remove job ${job.id} for campaign ${campaignId}: ${error.message}`,
+          );
+        }
+      }
+    }
+  }
 
   async createCampaign(dto: CreateCampaignDto) {
     // Validate template exists
@@ -106,6 +123,60 @@ export class CampaignsService {
     await this.processCsvAndEnqueueJobs(campaign, csvFilePath);
 
     return { message: 'Campaign started successfully' };
+  }
+
+  async pauseCampaign(campaignId: string) {
+    const campaign = await this.findCampaignById(campaignId);
+
+    if (campaign.status !== 'PROCESSING') {
+      throw new BadRequestException('Only campaigns in processing state can be paused');
+    }
+
+    await this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: 'PAUSED' },
+    });
+
+    await this.campaignQueue.pause();
+
+    return { id: campaignId, status: 'PAUSED' };
+  }
+
+  async resumeCampaign(campaignId: string) {
+    const campaign = await this.findCampaignById(campaignId);
+
+    if (campaign.status !== 'PAUSED') {
+      throw new BadRequestException('Only paused campaigns can be resumed');
+    }
+
+    await this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: 'PROCESSING' },
+    });
+
+    await this.campaignQueue.resume();
+
+    return { id: campaignId, status: 'PROCESSING' };
+  }
+
+  async deleteCampaign(campaignId: string) {
+    const campaign = await this.findCampaignById(campaignId);
+
+    await this.removeCampaignJobs(campaignId);
+
+    if (campaign.csvFilePath) {
+      try {
+        await fsp.unlink(campaign.csvFilePath);
+      } catch (error) {
+        this.logger.warn(`Failed to remove CSV file for campaign ${campaignId}: ${error.message}`);
+      }
+    }
+
+    await this.prisma.campaign.delete({
+      where: { id: campaignId },
+    });
+
+    return { message: 'Campaign deleted successfully', id: campaignId };
   }
 
   private async processCsvAndEnqueueJobs(campaign: any, csvFilePath: string): Promise<void> {

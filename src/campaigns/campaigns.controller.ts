@@ -1,16 +1,17 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Param,
-  UseInterceptors,
-  UploadedFile,
-  ParseFilePipe,
-  MaxFileSizeValidator,
-  FileTypeValidator,
+  Controller,
+  Delete,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseFilePipe,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+  MaxFileSizeValidator,
+  FileTypeValidator,
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -71,6 +72,21 @@ export class CampaignsController {
       campaignId,
       file.path,
     );
+  }
+
+  @Post(':id/pause')
+  pauseCampaign(@Param('id') id: string) {
+    return this.campaignsService.pauseCampaign(id);
+  }
+
+  @Post(':id/resume')
+  resumeCampaign(@Param('id') id: string) {
+    return this.campaignsService.resumeCampaign(id);
+  }
+
+  @Delete(':id')
+  deleteCampaign(@Param('id') id: string) {
+    return this.campaignsService.deleteCampaign(id);
   }
 
   @Get()
