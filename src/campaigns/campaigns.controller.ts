@@ -57,7 +57,10 @@ export class CampaignsController {
         validators: [
           new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10MB
           new FileTypeValidator({
-            fileType: /(text\/csv|application\/vnd\.ms-excel)/,
+            fileType: /^text\/csv$/i,
+          }),
+          new FileTypeValidator({
+            fileType: /^application\/vnd\.ms-excel$/i,
           }),
         ],
       }),
