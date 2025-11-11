@@ -1,4 +1,11 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsEmail,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class SetOperatorStatusDto {
   @IsString()
@@ -17,5 +24,18 @@ export class SetOperatorStatusDto {
   @IsString({ each: true })
   @IsOptional()
   segments?: string[];
+
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @IsNumber()
+  @Min(1)
+  @IsOptional()
+  maxConcurrent?: number;
 }
 

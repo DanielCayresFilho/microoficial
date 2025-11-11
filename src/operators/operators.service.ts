@@ -13,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 export class OperatorsService {
   private readonly sessionDurationMs: number;
   private readonly heartbeatGraceMs: number;
+  private readonly defaultMaxConcurrent: number;
 
   constructor(
     private prisma: PrismaService,
@@ -24,6 +25,10 @@ export class OperatorsService {
     );
     const heartbeatGraceMinutes = this.configService.get<number>(
       'OPERATOR_HEARTBEAT_GRACE_MINUTES',
+      5,
+    );
+    this.defaultMaxConcurrent = this.configService.get<number>(
+      'OPERATOR_DEFAULT_MAX_CONCURRENT',
       5,
     );
 
@@ -131,17 +136,70 @@ export class OperatorsService {
     });
   }
 
+  private generateAutoEmail(operatorId: string): string {
+    const sanitized = operatorId
+      .toString()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    return `operator-${sanitized || 'auto'}@presence.local`;
+  }
+
   async setOnline(operatorId: string, dto: SetOperatorStatusDto) {
-    const operator = await this.prisma.operator.findUnique({
+    let operator = await this.prisma.operator.findUnique({
       where: { id: operatorId },
     });
 
     if (!operator) {
-      throw new NotFoundException('Operator not found');
-    }
+      const autoEmail = dto.email?.trim() ?? this.generateAutoEmail(operatorId);
+      const autoName = dto.name?.trim() || `Operador ${operatorId}`;
+      const maxConcurrent =
+        dto.maxConcurrent && dto.maxConcurrent > 0
+          ? dto.maxConcurrent
+          : this.defaultMaxConcurrent;
 
-    if (!operator.isActive) {
-      throw new BadRequestException('Operator is not active');
+      operator = await this.prisma.operator.create({
+        data: {
+          id: operatorId,
+          name: autoName,
+          email: autoEmail,
+          isActive: true,
+          maxConcurrent,
+        },
+      });
+    } else {
+      const updateOperatorData: Partial<{
+        name: string;
+        email: string;
+        isActive: boolean;
+        maxConcurrent: number;
+      }> = {};
+
+      if (dto.name && dto.name.trim() && dto.name !== operator.name) {
+        updateOperatorData.name = dto.name.trim();
+      }
+
+      if (dto.email && dto.email.trim() && dto.email !== operator.email) {
+        updateOperatorData.email = dto.email.trim();
+      }
+
+      if (
+        dto.maxConcurrent &&
+        dto.maxConcurrent > 0 &&
+        dto.maxConcurrent !== operator.maxConcurrent
+      ) {
+        updateOperatorData.maxConcurrent = dto.maxConcurrent;
+      }
+
+      if (!operator.isActive) {
+        updateOperatorData.isActive = true;
+      }
+
+      if (Object.keys(updateOperatorData).length > 0) {
+        operator = await this.prisma.operator.update({
+          where: { id: operatorId },
+          data: updateOperatorData,
+        });
+      }
     }
 
     let numberId: string | null = null;

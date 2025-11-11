@@ -38,12 +38,13 @@ export class CampaignMessagesProcessor extends WorkerHost {
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const { campaignId, phoneNumberId, accessToken, to, templateName, languageCode, components } = job.data;
 
-    try {
-      this.logger.debug(
-        `Processing campaign message job ${job.id} for campaign ${campaignId} to ${to}`,
-      );
+    this.logger.debug(
+      `Processing campaign message job ${job.id} for campaign ${campaignId} to ${to}`,
+    );
 
-      // Send template message via WhatsApp
+    let messageId: string | undefined;
+
+    try {
       const response = await this.whatsappService.sendTemplateMessage(
         phoneNumberId,
         accessToken,
@@ -54,14 +55,28 @@ export class CampaignMessagesProcessor extends WorkerHost {
           components,
         },
       );
+      messageId = response.messages?.[0]?.id;
+    } catch (error) {
+      this.logger.error(
+        `Failed to send campaign message to ${to}: ${error.message}`,
+        error.stack,
+      );
 
-      const messageId = response.messages?.[0]?.id;
+      await this.prisma.campaign.update({
+        where: { id: campaignId },
+        data: {
+          failedCount: { increment: 1 },
+        },
+      });
 
-      // Save message to database
+      throw error;
+    }
+
+    try {
       await this.prisma.message.create({
         data: {
           numberId: job.data.phoneNumberId,
-          messageId: messageId,
+          messageId,
           wamid: messageId,
           direction: 'OUTBOUND',
           type: 'template',
@@ -72,7 +87,7 @@ export class CampaignMessagesProcessor extends WorkerHost {
             recipientData: job.data.recipientData,
           },
           status: 'SENT',
-          fromPhone: '', // Will be filled from webhook
+          fromPhone: '',
           toPhone: to,
           metadata: {
             campaignId,
@@ -80,36 +95,32 @@ export class CampaignMessagesProcessor extends WorkerHost {
           },
         },
       });
+    } catch (persistError) {
+      this.logger.error(
+        `Campaign message ${messageId ?? 'unknown'} sent to ${to}, but failed to persist in database: ${persistError.message}`,
+        persistError.stack,
+      );
+    }
 
-      // Update campaign stats
+    try {
       await this.prisma.campaign.update({
         where: { id: campaignId },
         data: {
           sentCount: { increment: 1 },
         },
       });
-
-      this.logger.log(
-        `Successfully sent campaign message ${messageId} to ${to}`,
-      );
-
-      return { success: true, messageId };
-    } catch (error) {
+    } catch (statsError) {
       this.logger.error(
-        `Failed to send campaign message to ${to}: ${error.message}`,
-        error.stack,
+        `Failed to update stats for campaign ${campaignId}: ${statsError.message}`,
+        statsError.stack,
       );
-
-      // Update campaign failure count
-      await this.prisma.campaign.update({
-        where: { id: campaignId },
-        data: {
-          failedCount: { increment: 1 },
-        },
-      });
-
-      throw error; // BullMQ will retry based on job options
     }
+
+    this.logger.log(
+      `Successfully sent campaign message ${messageId ?? 'unknown'} to ${to}`,
+    );
+
+    return { success: true, messageId };
   }
 
   @OnWorkerEvent('completed')
