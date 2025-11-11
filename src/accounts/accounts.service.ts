@@ -178,13 +178,17 @@ export class AccountsService {
       throw new NotFoundException('Number not found');
     }
 
-    const updateData: Partial<CreateNumberDto> & {
+    type NumberUpdateData = Omit<Partial<CreateNumberDto>, 'queueKey'> & {
       segments?: string[];
       queueKey?: string | null;
-    } = { ...dto };
+    };
+
+    const updateData: NumberUpdateData = { ...dto };
 
     if (dto.queueKey === '') {
       updateData.queueKey = null;
+    } else if (dto.queueKey !== undefined) {
+      updateData.queueKey = dto.queueKey;
     }
 
     if (dto.segments) {
