@@ -8,4 +8,8 @@ export class SendMessageDto {
   @IsBoolean()
   @IsOptional()
   previewUrl?: boolean;
+
+  @IsString()
+  @IsOptional()
+  operatorId?: string;
 }

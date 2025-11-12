@@ -1,6 +1,7 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger, Inject, forwardRef } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { ConversationEventSource, ConversationEventDirection, ConversationEventType } from '@prisma/client';
 import { QUEUE_NAMES } from '../queue.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventsGateway } from '../../events/events.gateway';
@@ -239,6 +240,10 @@ export class IncomingMessagesProcessor extends WorkerHost {
             status: 'OPEN',
             lastMessageAt: messageDate,
             lastAssignedAt: assignedOperatorId ? now : null,
+            lastCustomerMessageAt: messageDate,
+            manualAttemptsCount: 0,
+            manualAttemptsWindowStart: null,
+            manualBlockedUntil: null,
           },
           include: {
             operator: true,
@@ -255,6 +260,10 @@ export class IncomingMessagesProcessor extends WorkerHost {
             lastMessageAt: messageDate,
             operatorId: assignedOperatorId,
             lastAssignedAt: assignedOperatorId ? now : null,
+            lastCustomerMessageAt: messageDate,
+            manualAttemptsCount: 0,
+            manualAttemptsWindowStart: null,
+            manualBlockedUntil: null,
           },
           include: {
             operator: true,
@@ -285,6 +294,24 @@ export class IncomingMessagesProcessor extends WorkerHost {
           fromPhone: from,
           toPhone: to,
           timestamp: messageDate,
+        },
+      });
+
+      await this.prisma.conversationEvent.create({
+        data: {
+          conversationId: conversation.id,
+          messageId: savedMessage.id,
+          campaignId: null,
+          campaignContactId: null,
+          numberId: number.id,
+          operatorId: conversation.operatorId,
+          phoneNumber: conversation.customerPhone,
+          source: ConversationEventSource.CUSTOMER,
+          direction: ConversationEventDirection.INBOUND,
+          eventType: ConversationEventType.MESSAGE,
+          payload: {
+            type,
+          },
         },
       });
 

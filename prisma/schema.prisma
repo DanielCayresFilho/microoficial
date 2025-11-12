@@ -60,6 +60,7 @@ model Operator {
 
   conversations Conversation[]
   presence      OperatorPresence?
+  events        ConversationEvent[]
 
   @@map("operators")
 }
@@ -130,6 +131,7 @@ model Campaign {
   template Template @relation(fields: [templateId], references: [id])
   account  Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   number   Number   @relation(fields: [numberId], references: [id])
+  contacts CampaignContact[]
 
   @@map("campaigns")
 }
@@ -147,6 +149,13 @@ model Conversation {
   lastMessageAt   DateTime  @default(now())
   closedAt        DateTime?
   lastAssignedAt  DateTime?
+  lastAgentMessageAt    DateTime?
+  lastCustomerMessageAt DateTime?
+  manualAttemptsCount   Int       @default(0)
+  manualAttemptsWindowStart DateTime?
+  manualBlockedUntil    DateTime?
+  cpcMarkedAt           DateTime?
+  cpcMarkedBy           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -154,9 +163,12 @@ model Conversation {
   operator    Operator?   @relation(fields: [operatorId], references: [id])
   tabulation  Tabulation? @relation(fields: [tabulationId], references: [id])
   messages    Message[]
+  events      ConversationEvent[]
 
   @@index([customerPhone, numberId])
   @@index([operatorId])
+  @@index([status, operatorId])
+  @@index([manualBlockedUntil])
   @@index([status])
   @@map("conversations")
 }
@@ -183,12 +195,87 @@ model Message {
 
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   number       Number        @relation(fields: [numberId], references: [id])
+  events       ConversationEvent[]
 
   @@index([conversationId])
   @@index([messageId])
   @@index([fromPhone])
   @@index([timestamp])
   @@map("messages")
+}
+
+model CampaignContact {
+  id             String   @id @default(uuid())
+  campaignId     String
+  phoneNumber    String
+  rawPayload     Json?
+  status         String   @default("PENDING")
+  lastAttemptAt  DateTime?
+  lastSentAt     DateTime?
+  lastStatusAt   DateTime?
+  failedReason   String?
+  cpcMarkedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  events   ConversationEvent[]
+
+  @@unique([campaignId, phoneNumber])
+  @@index([phoneNumber])
+  @@map("campaign_contacts")
+}
+
+model ConversationEvent {
+  id                String   @id @default(uuid())
+  conversationId    String?
+  messageId         String?
+  campaignId        String?
+  campaignContactId String?
+  numberId          String?
+  operatorId        String?
+  phoneNumber       String
+  source            ConversationEventSource
+  direction         ConversationEventDirection
+  eventType         ConversationEventType
+  payload           Json?
+  cpcMarked         Boolean  @default(false)
+  tabulationId      String?
+  createdAt         DateTime @default(now())
+
+  conversation Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  message      Message?        @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  campaign     Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignContact CampaignContact? @relation(fields: [campaignContactId], references: [id], onDelete: SetNull)
+  number       Number?         @relation(fields: [numberId], references: [id], onDelete: SetNull)
+  operator     Operator?       @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  tabulation   Tabulation?     @relation(fields: [tabulationId], references: [id], onDelete: SetNull)
+
+  @@index([phoneNumber])
+  @@index([createdAt])
+  @@index([conversationId, createdAt])
+  @@index([campaignId, createdAt])
+  @@map("conversation_events")
+}
+
+enum ConversationEventSource {
+  CUSTOMER
+  OPERATOR
+  CAMPAIGN
+  SYSTEM
+}
+
+enum ConversationEventDirection {
+  INBOUND
+  OUTBOUND
+  NONE
+}
+
+enum ConversationEventType {
+  MESSAGE
+  TABULATION
+  CPC
+  NOTE
 }
 
 // Tabulations (Conversation Categories)

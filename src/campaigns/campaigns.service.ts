@@ -203,20 +203,42 @@ export class CampaignsService {
             });
 
             // Enqueue jobs with rate limiting
-            const jobs = results.map((row, index) => {
+            const jobs = [];
+
+            for (let index = 0; index < results.length; index += 1) {
+              const row = results[index];
               const phoneNumber = this.extractPhoneNumber(row);
               if (!phoneNumber) {
                 this.logger.warn(`Skipping row ${index}: no phone number found`);
-                return null;
+                continue;
               }
 
-              // Build template components from CSV data
+              const contact = await this.prisma.campaignContact.upsert({
+                where: {
+                  campaignId_phoneNumber: {
+                    campaignId: campaign.id,
+                    phoneNumber,
+                  },
+                },
+                update: {
+                  rawPayload: row,
+                  updatedAt: new Date(),
+                },
+                create: {
+                  campaignId: campaign.id,
+                  phoneNumber,
+                  rawPayload: row,
+                },
+              });
+
               const components = this.buildTemplateComponents(campaign.template, row);
 
-              return {
+              jobs.push({
                 name: JOB_NAMES.SEND_TEMPLATE_MESSAGE,
                 data: {
                   campaignId: campaign.id,
+                  campaignContactId: contact.id,
+                  numberId: campaign.number.id,
                   phoneNumberId: campaign.number.phoneNumberId,
                   accessToken: campaign.account.accessToken,
                   to: phoneNumber,
@@ -228,8 +250,8 @@ export class CampaignsService {
                 opts: {
                   delay: this.calculateDelay(index, campaign.rateLimit),
                 },
-              };
-            }).filter(job => job !== null);
+              });
+            }
 
             // Bulk add jobs to queue
             await this.campaignQueue.addBulk(jobs);

@@ -1,12 +1,20 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { subHours, differenceInHours } from 'date-fns';
+import {
+  ConversationEventDirection,
+  ConversationEventSource,
+  ConversationEventType,
+} from '@prisma/client';
 import { QUEUE_NAMES, JOB_NAMES } from '../queue.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsAppService } from '../../whatsapp/whatsapp.service';
 
 interface SendTemplateMessageJobData {
   campaignId: string;
+  campaignContactId: string;
+  numberId: string;
   phoneNumberId: string;
   accessToken: string;
   to: string;
@@ -36,11 +44,69 @@ export class CampaignMessagesProcessor extends WorkerHost {
   async process(
     job: Job<SendTemplateMessageJobData>,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    const { campaignId, phoneNumberId, accessToken, to, templateName, languageCode, components } = job.data;
+    const {
+      campaignId,
+      campaignContactId,
+      numberId,
+      phoneNumberId,
+      accessToken,
+      to,
+      templateName,
+      languageCode,
+      components,
+    } = job.data;
 
     this.logger.debug(
       `Processing campaign message job ${job.id} for campaign ${campaignId} to ${to}`,
     );
+
+    const now = new Date();
+    const twentyFourHoursAgo = subHours(now, 24);
+
+    const recentCampaignEvent = await this.prisma.conversationEvent.findFirst({
+      where: {
+        phoneNumber: to,
+        source: ConversationEventSource.CAMPAIGN,
+        createdAt: {
+          gte: twentyFourHoursAgo,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const recentCpcEvent = await this.prisma.conversationEvent.findFirst({
+      where: {
+        phoneNumber: to,
+        eventType: ConversationEventType.CPC,
+        cpcMarked: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (recentCampaignEvent || (recentCpcEvent && differenceInHours(now, recentCpcEvent.createdAt) < 24)) {
+      this.logger.debug(
+        `Skipping campaign send to ${to} due to 24h restriction (campaignId=${campaignId})`,
+      );
+
+      if (campaignContactId) {
+        await this.prisma.campaignContact.update({
+          where: { id: campaignContactId },
+          data: {
+            status: 'SKIPPED_24H',
+            lastAttemptAt: now,
+            lastStatusAt: now,
+            failedReason: recentCampaignEvent ? 'LIMIT_24H_CAMPAIGN' : 'LIMIT_24H_CPC',
+            updatedAt: now,
+          },
+        });
+      }
+
+      return { success: true };
+    }
 
     let messageId: string | undefined;
 
@@ -62,6 +128,19 @@ export class CampaignMessagesProcessor extends WorkerHost {
         error.stack,
       );
 
+      if (campaignContactId) {
+        await this.prisma.campaignContact.update({
+          where: { id: campaignContactId },
+          data: {
+            status: 'FAILED',
+            lastAttemptAt: now,
+            lastStatusAt: now,
+            failedReason: error.message,
+            updatedAt: now,
+          },
+        });
+      }
+
       await this.prisma.campaign.update({
         where: { id: campaignId },
         data: {
@@ -75,7 +154,7 @@ export class CampaignMessagesProcessor extends WorkerHost {
     try {
       await this.prisma.message.create({
         data: {
-          numberId: job.data.phoneNumberId,
+          numberId,
           messageId,
           wamid: messageId,
           direction: 'OUTBOUND',
@@ -95,11 +174,56 @@ export class CampaignMessagesProcessor extends WorkerHost {
           },
         },
       });
+
+      if (campaignContactId) {
+        await this.prisma.campaignContact.update({
+          where: { id: campaignContactId },
+          data: {
+            status: 'SENT',
+            lastAttemptAt: now,
+            lastSentAt: now,
+            lastStatusAt: now,
+            failedReason: null,
+            updatedAt: now,
+          },
+        });
+      }
+
+      await this.prisma.conversationEvent.create({
+        data: {
+          campaignId,
+          campaignContactId: campaignContactId ?? null,
+          numberId,
+          messageId,
+          phoneNumber: to,
+          source: ConversationEventSource.CAMPAIGN,
+          direction: ConversationEventDirection.OUTBOUND,
+          eventType: ConversationEventType.MESSAGE,
+          payload: {
+            templateName,
+            languageCode,
+            components,
+          },
+        },
+      });
     } catch (persistError) {
       this.logger.error(
         `Campaign message ${messageId ?? 'unknown'} sent to ${to}, but failed to persist in database: ${persistError.message}`,
         persistError.stack,
       );
+
+      if (campaignContactId) {
+        await this.prisma.campaignContact.update({
+          where: { id: campaignContactId },
+          data: {
+            status: 'SENT',
+            lastAttemptAt: now,
+            lastSentAt: now,
+            lastStatusAt: now,
+            updatedAt: now,
+          },
+        });
+      }
     }
 
     try {

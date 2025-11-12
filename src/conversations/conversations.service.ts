@@ -1,17 +1,99 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { addHours, differenceInHours, isAfter } from 'date-fns';
+import {
+  ConversationEventDirection,
+  ConversationEventSource,
+  ConversationEventType,
+  Conversation,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CloseConversationDto } from './dto/close-conversation.dto';
+import { SetCpcStatusDto } from './dto/set-cpc-status.dto';
 
 @Injectable()
 export class ConversationsService {
   private readonly logger = new Logger(ConversationsService.name);
 
+  private static readonly MANUAL_ATTEMPT_LIMIT = 2;
+  private static readonly MANUAL_BLOCK_WINDOW_HOURS = 3;
+  private static readonly MANUAL_ATTEMPT_WINDOW_HOURS = 24;
+
   constructor(
     private prisma: PrismaService,
     private whatsappService: WhatsAppService,
   ) {}
+
+  private computeEligibility(conversation: Conversation, now: Date) {
+    let attemptsCount = conversation.manualAttemptsCount ?? 0;
+    let windowStart = conversation.manualAttemptsWindowStart ?? null;
+
+    if (windowStart) {
+      const hours = differenceInHours(now, windowStart);
+      if (hours >= ConversationsService.MANUAL_ATTEMPT_WINDOW_HOURS) {
+        attemptsCount = 0;
+        windowStart = null;
+      }
+    }
+
+    const blockedUntil = conversation.manualBlockedUntil;
+    const isBlockedByTime = blockedUntil ? isAfter(blockedUntil, now) : false;
+    const limitReached = attemptsCount >= ConversationsService.MANUAL_ATTEMPT_LIMIT;
+
+    const canSend = !isBlockedByTime && !limitReached;
+
+    return {
+      canSend,
+      attemptsCount,
+      attemptsLimit: ConversationsService.MANUAL_ATTEMPT_LIMIT,
+      blockedUntil,
+      limitReached,
+      isBlockedByTime,
+      windowStart,
+      lastAgentMessageAt: conversation.lastAgentMessageAt,
+      lastCustomerMessageAt: conversation.lastCustomerMessageAt,
+      cpcMarkedAt: conversation.cpcMarkedAt,
+    };
+  }
+
+  private async registerEvent(data: {
+    conversationId?: string;
+    messageId?: string;
+    campaignId?: string;
+    campaignContactId?: string;
+    numberId?: string;
+    operatorId?: string;
+    phoneNumber: string;
+    source: ConversationEventSource;
+    direction: ConversationEventDirection;
+    eventType: ConversationEventType;
+    payload?: Record<string, any>;
+    cpcMarked?: boolean;
+    tabulationId?: string;
+  }) {
+    try {
+      await this.prisma.conversationEvent.create({
+        data: {
+          conversationId: data.conversationId ?? null,
+          messageId: data.messageId ?? null,
+          campaignId: data.campaignId ?? null,
+          campaignContactId: data.campaignContactId ?? null,
+          numberId: data.numberId ?? null,
+          operatorId: data.operatorId ?? null,
+          phoneNumber: data.phoneNumber,
+          source: data.source,
+          direction: data.direction,
+          eventType: data.eventType,
+          payload: data.payload ?? null,
+          cpcMarked: data.cpcMarked ?? false,
+          tabulationId: data.tabulationId ?? null,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to register conversation event: ${error.message}`);
+    }
+  }
 
   async findAllConversations(status?: string, operatorId?: string) {
     const where: any = {};
@@ -24,7 +106,7 @@ export class ConversationsService {
       where.operatorId = operatorId;
     }
 
-    return this.prisma.conversation.findMany({
+    const conversations = await this.prisma.conversation.findMany({
       where,
       include: {
         operator: true,
@@ -37,6 +119,13 @@ export class ConversationsService {
       },
       orderBy: { lastMessageAt: 'desc' },
     });
+
+    const now = new Date();
+
+    return conversations.map((conversation) => ({
+      ...conversation,
+      eligibility: this.computeEligibility(conversation, now),
+    }));
   }
 
   async findConversationById(id: string) {
@@ -60,7 +149,11 @@ export class ConversationsService {
       throw new NotFoundException('Conversation not found');
     }
 
-    return conversation;
+    const now = new Date();
+    return {
+      ...conversation,
+      eligibility: this.computeEligibility(conversation, now),
+    };
   }
 
   async sendMessage(conversationId: string, dto: SendMessageDto) {
@@ -68,6 +161,19 @@ export class ConversationsService {
 
     if (conversation.status !== 'OPEN') {
       throw new BadRequestException('Cannot send message to closed conversation');
+    }
+
+    const now = new Date();
+    const eligibility = this.computeEligibility(conversation as Conversation, now);
+
+    if (!eligibility.canSend) {
+      if (eligibility.isBlockedByTime && eligibility.blockedUntil) {
+        throw new BadRequestException(
+          `Envio bloqueado até ${eligibility.blockedUntil.toISOString()} devido à janela mínima de 3 horas para repescagem.`,
+        );
+      }
+
+      throw new BadRequestException('Limite diário de repescagens atingido. Aguarde o cliente responder.');
     }
 
     // Send message via WhatsApp
@@ -101,12 +207,22 @@ export class ConversationsService {
       });
 
       // Update conversation lastMessageAt
-      const now = new Date();
+      const manualAttemptsCount = eligibility.limitReached
+        ? ConversationsService.MANUAL_ATTEMPT_LIMIT
+        : eligibility.attemptsCount;
+      const updatedAttempts = manualAttemptsCount + 1;
+      const manualWindowStart =
+        eligibility.windowStart ?? now;
+
       await this.prisma.conversation.update({
         where: { id: conversationId },
         data: {
           lastMessageAt: now,
           lastAssignedAt: now,
+          lastAgentMessageAt: now,
+          manualAttemptsCount: updatedAttempts,
+          manualAttemptsWindowStart: manualWindowStart,
+          manualBlockedUntil: addHours(now, ConversationsService.MANUAL_BLOCK_WINDOW_HOURS),
         },
       });
 
@@ -116,6 +232,20 @@ export class ConversationsService {
           data: { lastAssignedAt: now },
         });
       }
+
+      await this.registerEvent({
+        conversationId: conversation.id,
+        messageId: savedMessage.id,
+        numberId: conversation.numberId,
+        operatorId: dto.operatorId ?? conversation.operatorId ?? null,
+        phoneNumber: conversation.customerPhone,
+        source: ConversationEventSource.OPERATOR,
+        direction: ConversationEventDirection.OUTBOUND,
+        eventType: ConversationEventType.MESSAGE,
+        payload: {
+          text: dto.text,
+        },
+      });
 
       this.logger.log(`Message sent to conversation ${conversationId}: ${messageId}`);
 
@@ -162,6 +292,20 @@ export class ConversationsService {
       include: {
         operator: true,
         tabulation: true,
+      },
+    });
+
+    await this.registerEvent({
+      conversationId,
+      phoneNumber: closedConversation.customerPhone,
+      numberId: closedConversation.numberId,
+      operatorId: closedConversation.operatorId ?? null,
+      source: ConversationEventSource.OPERATOR,
+      direction: ConversationEventDirection.NONE,
+      eventType: ConversationEventType.TABULATION,
+      tabulationId: dto.tabulationId,
+      payload: {
+        notes: dto.notes ?? null,
       },
     });
 
@@ -226,6 +370,59 @@ export class ConversationsService {
     });
 
     return updatedConversation;
+  }
+
+  async setCpcStatus(conversationId: string, dto: SetCpcStatusDto) {
+    const conversation = await this.findConversationById(conversationId);
+
+    const now = new Date();
+
+    const updatedConversation = await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        cpcMarkedAt: dto.value ? now : null,
+        cpcMarkedBy: dto.value ? dto.operatorId ?? conversation.operatorId ?? null : null,
+      },
+    });
+
+    // Update related campaign contacts
+    await this.prisma.campaignContact.updateMany({
+      where: {
+        phoneNumber: conversation.customerPhone,
+      },
+      data: {
+        cpcMarkedAt: dto.value ? now : null,
+        updatedAt: now,
+      },
+    });
+
+    await this.registerEvent({
+      conversationId,
+      phoneNumber: conversation.customerPhone,
+      numberId: conversation.numberId,
+      operatorId: dto.operatorId ?? conversation.operatorId ?? null,
+      source: ConversationEventSource.OPERATOR,
+      direction: ConversationEventDirection.NONE,
+      eventType: ConversationEventType.CPC,
+      cpcMarked: dto.value,
+    });
+
+    return {
+      ...updatedConversation,
+      eligibility: this.computeEligibility(updatedConversation, now),
+    };
+  }
+
+  async getConversationEligibility(conversationId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    return this.computeEligibility(conversation, new Date());
   }
 
   async getConversationStats() {
