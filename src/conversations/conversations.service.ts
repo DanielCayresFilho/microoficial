@@ -37,23 +37,44 @@ export class ConversationsService {
       }
     }
 
+    // Check if last message was from customer
+    const lastCustomerMessageAt = conversation.lastCustomerMessageAt;
+    const lastAgentMessageAt = conversation.lastAgentMessageAt;
     const blockedUntil = conversation.manualBlockedUntil;
-    const isBlockedByTime = blockedUntil ? isAfter(blockedUntil, now) : false;
+    
+    // If blockedUntil is null and customer sent a message, it means customer replied and blocking was reset
+    // Also check if lastCustomerMessageAt is more recent than lastAgentMessageAt
+    const customerReplied = lastCustomerMessageAt && (
+      !blockedUntil || 
+      !lastAgentMessageAt || 
+      isAfter(lastCustomerMessageAt, lastAgentMessageAt)
+    );
+
+    // If customer replied, reset blocking and attempts
+    if (customerReplied) {
+      attemptsCount = 0;
+      windowStart = null;
+    }
+
+    // Only block by time if customer hasn't replied and blockedUntil is in the future
+    const isBlockedByTime = !customerReplied && blockedUntil ? isAfter(blockedUntil, now) : false;
     const limitReached = attemptsCount >= ConversationsService.MANUAL_ATTEMPT_LIMIT;
 
-    const canSend = !isBlockedByTime && !limitReached;
+    // Allow sending if customer replied, even if limit was reached
+    const canSend = !isBlockedByTime && (customerReplied || !limitReached);
 
     return {
       canSend,
-      attemptsCount,
+      attemptsCount: customerReplied ? 0 : attemptsCount,
       attemptsLimit: ConversationsService.MANUAL_ATTEMPT_LIMIT,
-      blockedUntil,
-      limitReached,
+      blockedUntil: customerReplied ? null : blockedUntil,
+      limitReached: customerReplied ? false : limitReached,
       isBlockedByTime,
-      windowStart,
+      windowStart: customerReplied ? null : windowStart,
       lastAgentMessageAt: conversation.lastAgentMessageAt,
       lastCustomerMessageAt: conversation.lastCustomerMessageAt,
       cpcMarkedAt: conversation.cpcMarkedAt,
+      lastMessageFromCustomer: !!customerReplied,
     };
   }
 
@@ -171,12 +192,23 @@ export class ConversationsService {
 
     if (!eligibility.canSend) {
       if (eligibility.isBlockedByTime && eligibility.blockedUntil) {
+        const hoursUntil = Math.ceil(
+          differenceInHours(eligibility.blockedUntil, now)
+        );
         throw new BadRequestException(
-          `Envio bloqueado até ${eligibility.blockedUntil.toISOString()} devido à janela mínima de 3 horas para repescagem.`,
+          `Aguarde o cliente responder. Caso não responda em até ${hoursUntil} hora(s), você poderá enviar uma nova mensagem.`,
         );
       }
 
-      throw new BadRequestException('Limite diário de repescagens atingido. Aguarde o cliente responder.');
+      if (eligibility.limitReached) {
+        throw new BadRequestException(
+          'Você já atingiu o limite de repescagens. Aguarde o cliente responder para poder enviar novas mensagens. Caso não responda em até 3 horas, você poderá tentar novamente.',
+        );
+      }
+
+      throw new BadRequestException(
+        'Não é possível enviar mensagem no momento. Aguarde o cliente responder ou tente novamente mais tarde.',
+      );
     }
 
     // Send message via WhatsApp
