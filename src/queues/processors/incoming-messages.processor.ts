@@ -89,13 +89,26 @@ export class IncomingMessagesProcessor extends WorkerHost {
       }
 
       // Get the number record
-      const number = await this.prisma.number.findUnique({
+      let number = await this.prisma.number.findUnique({
         where: { phoneNumberId },
       });
 
       if (!number) {
-        this.logger.error(`Number with phoneNumberId ${phoneNumberId} not found`);
-        throw new Error(`Number not found: ${phoneNumberId}`);
+        number = await this.prisma.number.findFirst({
+          where: { phoneNumber: to },
+        });
+        if (number && !number.phoneNumberId) {
+          await this.prisma.number.update({
+            where: { id: number.id },
+            data: { phoneNumberId },
+          });
+        }
+      }
+
+      if (!number) {
+        this.logger.error(`Number with phoneNumberId ${phoneNumberId} not found and no fallback by phone ${to}`);
+        // Acknowledge job without crashing to avoid endless retries
+        return;
       }
 
       const messageDate = this.parseTimestamp(timestamp);

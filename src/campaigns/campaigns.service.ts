@@ -249,6 +249,9 @@ export class CampaignsService {
                 },
                 opts: {
                   delay: this.calculateDelay(index, campaign.rateLimit),
+                  attempts: 1,
+                  removeOnComplete: true,
+                  removeOnFail: true,
                 },
               });
             }
