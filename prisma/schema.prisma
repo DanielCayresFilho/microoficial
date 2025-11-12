@@ -44,6 +44,7 @@ model Number {
   messages      Message[]
   templates     Template[]
   presences     OperatorPresence[]
+  events        ConversationEvent[]
 
   @@map("numbers")
 }
@@ -132,6 +133,7 @@ model Campaign {
   account  Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   number   Number   @relation(fields: [numberId], references: [id])
   contacts CampaignContact[]
+  events   ConversationEvent[]
 
   @@map("campaigns")
 }
@@ -289,6 +291,7 @@ model Tabulation {
   updatedAt     DateTime @updatedAt
 
   conversations Conversation[]
+  events        ConversationEvent[]
 
   @@map("tabulations")
 }
