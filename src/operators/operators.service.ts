@@ -150,20 +150,16 @@ export class OperatorsService {
     });
 
     if (!operator) {
-      const autoEmail = dto.email?.trim() ?? this.generateAutoEmail(operatorId);
-      const autoName = dto.name?.trim() || `Operador ${operatorId}`;
-      const maxConcurrent =
-        dto.maxConcurrent && dto.maxConcurrent > 0
-          ? dto.maxConcurrent
-          : this.defaultMaxConcurrent;
-
       operator = await this.prisma.operator.create({
         data: {
           id: operatorId,
-          name: autoName,
-          email: autoEmail,
+          name: dto.name?.trim() || `Operador ${operatorId}`,
+          email: dto.email?.trim() || `operator-${operatorId}@presence.local`,
           isActive: true,
-          maxConcurrent,
+          maxConcurrent:
+            dto.maxConcurrent && dto.maxConcurrent > 0
+              ? dto.maxConcurrent
+              : this.defaultMaxConcurrent,
         },
       });
     } else {

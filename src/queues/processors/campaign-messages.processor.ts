@@ -61,6 +61,28 @@ export class CampaignMessagesProcessor extends WorkerHost {
     );
 
     const now = new Date();
+    const number = await this.prisma.number.findFirst({
+      where: {
+        OR: [{ id: numberId }, { phoneNumberId }, { phoneNumber: to }],
+      },
+    });
+
+    if (!number) {
+      this.logger.warn(`Skipping campaign message to ${to}: number not registered`);
+      if (campaignContactId) {
+        await this.prisma.campaignContact.update({
+          where: { id: campaignContactId },
+          data: {
+            status: 'SKIPPED_NUMBER_NOT_FOUND',
+            lastAttemptAt: now,
+            lastStatusAt: now,
+            failedReason: 'NUMBER_NOT_FOUND',
+            updatedAt: now,
+          },
+        });
+      }
+      return { success: true };
+    }
     const twentyFourHoursAgo = subHours(now, 24);
 
     const recentCampaignEvent = await this.prisma.conversationEvent.findFirst({
@@ -154,7 +176,7 @@ export class CampaignMessagesProcessor extends WorkerHost {
     try {
       await this.prisma.message.create({
         data: {
-          numberId,
+          numberId: number.id,
           messageId,
           wamid: messageId,
           direction: 'OUTBOUND',
