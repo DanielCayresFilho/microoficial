@@ -203,7 +203,27 @@ export class CampaignsService {
             });
 
             // Enqueue jobs with rate limiting
-            const jobs = [];
+            const jobs: Array<{
+              name: string;
+              data: {
+                campaignId: string;
+                campaignContactId: string;
+                numberId: string;
+                phoneNumberId: string;
+                accessToken: string;
+                to: string;
+                templateName: string;
+                languageCode: string;
+                components?: any[];
+                recipientData?: any;
+              };
+              opts: {
+                delay: number;
+                attempts: number;
+                removeOnComplete: boolean;
+                removeOnFail: boolean;
+              };
+            }> = [];
 
             for (let index = 0; index < results.length; index += 1) {
               const row = results[index];

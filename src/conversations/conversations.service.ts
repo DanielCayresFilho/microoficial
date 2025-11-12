@@ -73,22 +73,25 @@ export class ConversationsService {
     tabulationId?: string;
   }) {
     try {
+      const eventData: any = {
+        phoneNumber: data.phoneNumber,
+        source: data.source,
+        direction: data.direction,
+        eventType: data.eventType,
+        cpcMarked: data.cpcMarked ?? false,
+      };
+
+      if (data.conversationId) eventData.conversationId = data.conversationId;
+      if (data.messageId) eventData.messageId = data.messageId;
+      if (data.campaignId) eventData.campaignId = data.campaignId;
+      if (data.campaignContactId) eventData.campaignContactId = data.campaignContactId;
+      if (data.numberId) eventData.numberId = data.numberId;
+      if (data.operatorId) eventData.operatorId = data.operatorId;
+      if (data.payload) eventData.payload = data.payload;
+      if (data.tabulationId) eventData.tabulationId = data.tabulationId;
+
       await this.prisma.conversationEvent.create({
-        data: {
-          conversationId: data.conversationId ?? null,
-          messageId: data.messageId ?? null,
-          campaignId: data.campaignId ?? null,
-          campaignContactId: data.campaignContactId ?? null,
-          numberId: data.numberId ?? null,
-          operatorId: data.operatorId ?? null,
-          phoneNumber: data.phoneNumber,
-          source: data.source,
-          direction: data.direction,
-          eventType: data.eventType,
-          payload: data.payload ?? null,
-          cpcMarked: data.cpcMarked ?? false,
-          tabulationId: data.tabulationId ?? null,
-        },
+        data: eventData,
       });
     } catch (error) {
       this.logger.warn(`Failed to register conversation event: ${error.message}`);
@@ -237,7 +240,7 @@ export class ConversationsService {
         conversationId: conversation.id,
         messageId: savedMessage.id,
         numberId: conversation.numberId,
-        operatorId: dto.operatorId ?? conversation.operatorId ?? null,
+        operatorId: dto.operatorId ?? conversation.operatorId ?? undefined,
         phoneNumber: conversation.customerPhone,
         source: ConversationEventSource.OPERATOR,
         direction: ConversationEventDirection.OUTBOUND,
@@ -299,14 +302,16 @@ export class ConversationsService {
       conversationId,
       phoneNumber: closedConversation.customerPhone,
       numberId: closedConversation.numberId,
-      operatorId: closedConversation.operatorId ?? null,
+      operatorId: closedConversation.operatorId ?? undefined,
       source: ConversationEventSource.OPERATOR,
       direction: ConversationEventDirection.NONE,
       eventType: ConversationEventType.TABULATION,
       tabulationId: dto.tabulationId,
-      payload: {
-        notes: dto.notes ?? null,
-      },
+      payload: dto.notes
+        ? {
+            notes: dto.notes,
+          }
+        : undefined,
     });
 
     this.logger.log(`Conversation ${conversationId} closed with tabulation: ${tabulation.name}`);
@@ -400,7 +405,7 @@ export class ConversationsService {
       conversationId,
       phoneNumber: conversation.customerPhone,
       numberId: conversation.numberId,
-      operatorId: dto.operatorId ?? conversation.operatorId ?? null,
+      operatorId: dto.operatorId ?? conversation.operatorId ?? undefined,
       source: ConversationEventSource.OPERATOR,
       direction: ConversationEventDirection.NONE,
       eventType: ConversationEventType.CPC,
