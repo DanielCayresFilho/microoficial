@@ -1413,8 +1413,9 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
             placeholder="Escreva uma mensagem para o cliente..."
             value={messageText}
             onChange={(event) => setMessageText(event.target.value)}
-            onKeyPress={(event) => {
+            onKeyDown={(event) => {
               if (event.key === 'Enter' && event.ctrlKey && !sending && messageText.trim()) {
+                event.preventDefault();
                 handleSendMessage();
               }
             }}
