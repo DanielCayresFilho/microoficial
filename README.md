@@ -500,7 +500,7 @@ Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalh
 
 ## 👥 Autores
 
-- **Equipe de Desenvolvimento** - [@seu-usuario](https://github.com/seu-usuario)
+- **Equipe de Desenvolvimento** - [@DanielCayresFilho](https://github.com/DanielCayresFilho) - [@guilhermebertolaccini](https://github.com/guilhermebertolaccini)
 
 ---
 
