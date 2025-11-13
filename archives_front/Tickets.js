@@ -274,6 +274,7 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
   const [tabulations, setTabulations] = useState([]);
   const heartbeatRef = useRef(null);
   const fetchTimeoutRef = useRef(null);
+  const eligibilityTimeoutRef = useRef(null);
   const [fallbackSocket, setFallbackSocket] = useState(null);
   const [cpcLoading, setCpcLoading] = useState(false);
 
@@ -414,29 +415,44 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     }
   }, [conversationId]);
 
-  const scheduleFetchConversation = useCallback(
-    (delay = 0) => {
+  // Função para atualizar apenas a elegibilidade (sem recarregar a conversa inteira)
+  const fetchEligibility = useCallback(async () => {
+    if (!conversationId) return;
+
+    try {
+      const eligibilityData = await whatsappMicroservice.getConversationEligibility(conversationId);
+      setConversation((previous) => {
+        if (!previous || previous.id !== conversationId) {
+          return previous;
+        }
+        return {
+          ...previous,
+          eligibility: eligibilityData,
+        };
+      });
+    } catch (err) {
+      console.warn("Falha ao buscar elegibilidade:", err?.message || err);
+    }
+  }, [conversationId]);
+
+  const scheduleFetchEligibility = useCallback(
+    (delay = 500) => {
       if (!conversationId) {
         return;
       }
 
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-
-      if (delay === 0) {
-        fetchConversation();
-        return;
+      if (eligibilityTimeoutRef.current) {
+        clearTimeout(eligibilityTimeoutRef.current);
       }
 
       const timeout = setTimeout(() => {
-        fetchConversation();
-        fetchTimeoutRef.current = null;
+        fetchEligibility();
+        eligibilityTimeoutRef.current = null;
       }, delay);
 
-      fetchTimeoutRef.current = timeout;
+      eligibilityTimeoutRef.current = timeout;
     },
-    [conversationId, fetchConversation]
+    [conversationId, fetchEligibility]
   );
 
   const fetchTabulations = useCallback(async () => {
@@ -454,21 +470,41 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
       }
+      if (eligibilityTimeoutRef.current) {
+        clearTimeout(eligibilityTimeoutRef.current);
+      }
     };
   }, [fetchConversation]);
+
+  // Nota: A elegibilidade já vem na resposta do getConversationById, 
+  // então não precisamos buscá-la separadamente após carregar a conversa.
+  // Apenas atualizamos quando necessário (após mensagens via socket).
 
   useEffect(() => {
     fetchTabulations();
   }, [fetchTabulations]);
 
+  // Memoiza mensagens ordenadas para evitar recálculos desnecessários
+  // Usa referência direta do array de mensagens para evitar recálculos quando apenas o status muda
   const sortedMessages = useMemo(() => {
-    if (!conversation?.messages) {
+    if (!conversation?.messages || !Array.isArray(conversation.messages)) {
       return [];
     }
-    return [...conversation.messages].sort((a, b) => {
-      return new Date(a.timestamp) - new Date(b.timestamp);
+    // Cria uma cópia ordenada das mensagens (ordenação estável)
+    const messages = [...conversation.messages];
+    messages.sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      if (timeA !== timeB) {
+        return timeA - timeB;
+      }
+      // Se os timestamps forem iguais, ordena por ID para estabilidade
+      const idA = a.id || a.wamid || '';
+      const idB = b.id || b.wamid || '';
+      return idA.localeCompare(idB);
     });
-  }, [conversation]);
+    return messages;
+  }, [conversation?.messages]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !conversationId) {
@@ -480,17 +516,116 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
       return;
     }
 
+    const messageToSend = messageText.trim();
     setSending(true);
     setError(null);
+    
+    // Cria uma mensagem otimista (temporária) para aparecer imediatamente
+    const optimisticMessageId = `temp-${Date.now()}-${Math.random()}`;
+    const optimisticMessage = {
+      id: optimisticMessageId,
+      wamid: null,
+      type: "text",
+      direction: "OUTBOUND",
+      content: {
+        text: messageToSend,
+      },
+      timestamp: new Date().toISOString(),
+      status: "PENDING", // Status temporário
+      conversationId,
+    };
+
+    // Adiciona a mensagem otimista imediatamente ao estado na posição correta
+    setConversation((previous) => {
+      if (!previous || previous.id !== conversationId) {
+        return previous;
+      }
+
+      const existingMessages = previous.messages ?? [];
+      
+      // Verifica se a mensagem otimista já existe (evita duplicatas)
+      const alreadyExists = existingMessages.some(
+        (item) => item.id === optimisticMessageId
+      );
+
+      if (alreadyExists) {
+        return previous;
+      }
+
+      // Função helper para normalizar timestamp
+      const getTimestamp = (msg) => {
+        if (!msg.timestamp) return 0;
+        const ts = new Date(msg.timestamp).getTime();
+        return isNaN(ts) ? 0 : ts;
+      };
+
+      // Insere a mensagem otimista na posição correta baseada no timestamp
+      const optimisticTimestamp = getTimestamp(optimisticMessage);
+      const insertIndex = existingMessages.findIndex(
+        (item) => getTimestamp(item) > optimisticTimestamp
+      );
+      
+      const updatedMessages = insertIndex === -1
+        ? [...existingMessages, optimisticMessage]
+        : [
+            ...existingMessages.slice(0, insertIndex),
+            optimisticMessage,
+            ...existingMessages.slice(insertIndex),
+          ];
+
+      // Atualiza a conversa com a mensagem otimista na posição correta
+      // O scroll automático será acionado pelo useEffect que observa conversation?.messages
+      return {
+        ...previous,
+        messages: updatedMessages,
+        lastMessageAt: optimisticMessage.timestamp,
+        lastAgentMessageAt: optimisticMessage.timestamp,
+      };
+    });
+
+    setMessageText(""); // Limpa o campo após adicionar a mensagem otimista
 
     try {
       await whatsappMicroservice.sendConversationMessage(conversationId, {
-        text: messageText.trim(),
+        text: messageToSend,
         operatorId,
       });
-      setMessageText("");
-      // Pequeno delay para garantir que a mensagem foi processada
-      setTimeout(() => fetchConversation(), 100);
+      
+      // A mensagem real será atualizada via socket quando chegar
+      // Removemos a mensagem otimista quando a real chegar (no handleNewMessage)
+      // A elegibilidade será atualizada localmente quando a mensagem real chegar via socket
+      // Não precisa buscar do backend, pois a mensagem real virá com todos os dados
+      
+      // Timeout para limpar mensagem otimista se a real não chegar em 10 segundos
+      // Apenas remove do estado local, sem recarregar a conversa (tudo em tempo real)
+      setTimeout(() => {
+        setConversation((previous) => {
+          if (!previous || previous.id !== conversationId) {
+            return previous;
+          }
+
+          const existingMessages = previous.messages ?? [];
+          const hasOptimisticMessage = existingMessages.some(
+            (item) => item.id === optimisticMessageId
+          );
+
+          // Se a mensagem otimista ainda existe, significa que a real não chegou
+          // Apenas remove do estado local (a mensagem real chegará via socket quando disponível)
+          if (hasOptimisticMessage) {
+            console.warn("⚠️ Mensagem otimista não foi substituída após 10s, removendo do estado local");
+            const filteredMessages = existingMessages.filter(
+              (item) => item.id !== optimisticMessageId
+            );
+            
+            return {
+              ...previous,
+              messages: filteredMessages,
+            };
+          }
+
+          return previous;
+        });
+      }, 10000); // 10 segundos
     } catch (err) {
       // Captura a mensagem de erro do backend (que já é mais amigável)
       const errorMessage =
@@ -499,12 +634,32 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         err?.error ||
         "Não foi possível enviar a mensagem. Tente novamente.";
       
+      // Remove a mensagem otimista em caso de erro
+      setConversation((previous) => {
+        if (!previous || previous.id !== conversationId) {
+          return previous;
+        }
+
+        const existingMessages = previous.messages ?? [];
+        const filteredMessages = existingMessages.filter(
+          (item) => item.id !== optimisticMessageId
+        );
+
+        return {
+          ...previous,
+          messages: filteredMessages,
+        };
+      });
+      
       // Exibe a mensagem de erro do backend
       toast.error(errorMessage);
       setError(errorMessage);
       
-      // Recarrega a conversa para atualizar o estado de elegibilidade
-      setTimeout(() => fetchConversation(), 500);
+      // Restaura o texto da mensagem em caso de erro
+      setMessageText(messageToSend);
+      
+      // Em caso de erro, a elegibilidade será atualizada quando o operador tentar enviar novamente
+      // Não precisa buscar do backend imediatamente, pois o erro já foi tratado
     } finally {
       setSending(false);
     }
@@ -524,9 +679,26 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         tabulationId: selectedTabulation,
         notes: closeNotes.trim() || undefined,
       });
+      
+      // Atualiza o estado local sem recarregar a conversa inteira
+      setConversation((previous) => {
+        if (!previous || previous.id !== conversationId) {
+          return previous;
+        }
+        return {
+          ...previous,
+          status: "CLOSED",
+          tabulationId: selectedTabulation,
+          notes: closeNotes.trim() || previous.notes,
+          closedAt: new Date().toISOString(),
+        };
+      });
+      
       setCloseNotes("");
       setSelectedTabulation("");
-      await fetchConversation();
+      
+      // A atualização completa virá via socket (se o backend emitir evento)
+      // Não recarrega para evitar reload
     } catch (err) {
       const message =
         err?.message ||
@@ -624,8 +796,19 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         value: !hasCpc,
         operatorId,
       });
+      
+      // Atualiza o estado local sem recarregar a conversa inteira
+      setConversation((previous) => {
+        if (!previous || previous.id !== conversationId) {
+          return previous;
+        }
+        return {
+          ...previous,
+          cpcMarkedAt: !hasCpc ? new Date().toISOString() : null,
+        };
+      });
+      
       toast.success(!hasCpc ? "Contato marcado como CPC." : "Contato removido de CPC.");
-      await fetchConversation();
     } catch (toggleError) {
       const message =
         toggleError?.message ||
@@ -635,7 +818,7 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     } finally {
       setCpcLoading(false);
     }
-  }, [conversationId, fetchConversation, hasCpc, operatorId]);
+  }, [conversationId, hasCpc, operatorId]);
 
   useEffect(() => {
     if (!isOnline || !operatorId) {
@@ -757,6 +940,15 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
       } = payload ?? {};
       
       if (!message) {
+        console.warn("⚠️ Mensagem recebida sem conteúdo:", payload);
+        return;
+      }
+
+      // Garante que a mensagem tem direção definida
+      if (!message.direction || (message.direction !== "INBOUND" && message.direction !== "OUTBOUND")) {
+        console.warn("⚠️ Mensagem sem direção válida:", message);
+        // Tenta inferir a direção baseado no operador
+        // Se não temos como inferir, ignora a mensagem
         return;
       }
 
@@ -764,62 +956,389 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
       if (payloadConversationId === conversationId) {
         const isInboundMessage = message.direction === "INBOUND";
         
+        console.log(`📨 Processando mensagem ${isInboundMessage ? "INBOUND" : "OUTBOUND"}:`, {
+          id: message.id,
+          wamid: message.wamid,
+          timestamp: message.timestamp,
+          direction: message.direction,
+          text: message.content?.text?.substring(0, 50),
+        });
+        
         setConversation((previous) => {
           if (!previous) {
             return {
               id: payloadConversationId,
               messages: [message],
               lastMessageAt: message.timestamp,
+              [isInboundMessage ? "lastCustomerMessageAt" : "lastAgentMessageAt"]: message.timestamp,
             };
           }
 
           const existingMessages = previous.messages ?? [];
           
-          // Verifica duplicatas
-          const alreadyExists = existingMessages.some(
-            (item) =>
-              (item.id && message.id && item.id === message.id) ||
-              (item.wamid && message.wamid && item.wamid === message.wamid)
-          );
+          // Função helper para normalizar timestamp
+          const getTimestamp = (msg) => {
+            if (!msg.timestamp) return 0;
+            const ts = new Date(msg.timestamp).getTime();
+            return isNaN(ts) ? 0 : ts;
+          };
+          
+          // Verifica duplicatas por ID, wamid, ou combinação de texto + direção + timestamp próximo
+          const messageId = message.id;
+          const messageWamid = message.wamid;
+          const messageTimestamp = getTimestamp(message);
+          const messageText = message.content?.text?.trim();
+          const messageDirection = message.direction;
+          
+          const alreadyExists = existingMessages.some((item) => {
+            // Verifica por ID exato
+            if (messageId && item.id && item.id === messageId) {
+              return true;
+            }
+            // Verifica por wamid exato
+            if (messageWamid && item.wamid && item.wamid === messageWamid) {
+              return true;
+            }
+            // Verifica se é uma mensagem otimista que já foi substituída
+            if (item.id?.startsWith("temp-") && messageText && item.direction === messageDirection) {
+              const itemText = item.content?.text?.trim();
+              if (itemText === messageText) {
+                const itemTimestamp = getTimestamp(item);
+                // Se o timestamp está muito próximo (dentro de 5 segundos), provavelmente é a mesma mensagem
+                if (Math.abs(messageTimestamp - itemTimestamp) < 5000) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          });
 
           if (alreadyExists) {
-            console.log("Mensagem duplicada ignorada:", message.id || message.wamid);
+            console.log("⚠️ Mensagem duplicada ignorada:", {
+              id: messageId || messageWamid,
+              direction: messageDirection,
+              text: messageText?.substring(0, 30),
+            });
             return previous;
           }
 
-          console.log("✅ Adicionando nova mensagem ao estado");
-          return {
-            ...previous,
-            messages: [...existingMessages, message],
-            lastMessageAt: message.timestamp,
-          };
-        });
+          // Se é uma mensagem OUTBOUND (do operador), tenta substituir a mensagem otimista
+          if (!isInboundMessage && message.type === "text" && messageText) {
+            // Busca por mensagem otimista que corresponda ao texto e direção
+            const optimisticMessageIndex = existingMessages.findIndex(
+              (item) =>
+                item.id?.startsWith("temp-") &&
+                item.direction === "OUTBOUND" &&
+                item.type === "text" &&
+                item.content?.text &&
+                item.content.text.trim() === messageText &&
+                (item.status === "PENDING" || !item.status)
+            );
 
-        // Se a mensagem é do cliente, recarrega a conversa para atualizar elegibilidade
-        if (isInboundMessage) {
-          console.log("🔄 Mensagem do cliente recebida, recarregando conversa para atualizar elegibilidade");
-          setTimeout(() => fetchConversation(), 300);
-        }
+            if (optimisticMessageIndex !== -1) {
+              // Substitui a mensagem otimista pela mensagem real
+              console.log("✅ Substituindo mensagem otimista pela mensagem real:", {
+                optimisticId: existingMessages[optimisticMessageIndex].id,
+                realId: messageId || messageWamid,
+                direction: messageDirection,
+              });
+              
+              // Remove a mensagem otimista primeiro
+              const messagesWithoutOptimistic = existingMessages.filter(
+                (item, index) => index !== optimisticMessageIndex
+              );
+              
+              // Remove outras mensagens otimistas duplicadas com o mesmo texto (se houver)
+              const messagesWithoutDuplicates = messagesWithoutOptimistic.filter(
+                (item) => {
+                  // Mantém mensagens que não são otimistas duplicadas
+                  if (!item.id?.startsWith("temp-")) {
+                    return true;
+                  }
+                  // Remove outras mensagens otimistas com o mesmo texto, direção e timestamp próximo
+                  if (
+                    item.direction === "OUTBOUND" &&
+                    item.type === "text" &&
+                    item.content?.text &&
+                    item.content.text.trim() === messageText
+                  ) {
+                    const itemTimestamp = getTimestamp(item);
+                    // Se o timestamp está muito próximo (dentro de 10 segundos), remove
+                    if (Math.abs(messageTimestamp - itemTimestamp) < 10000) {
+                      return false;
+                    }
+                  }
+                  return true;
+                }
+              );
+              
+              // Insere a mensagem real na posição correta baseada no timestamp
+              const insertIndex = messagesWithoutDuplicates.findIndex(
+                (item) => getTimestamp(item) > messageTimestamp
+              );
+              
+              const updatedMessages = insertIndex === -1
+                ? [...messagesWithoutDuplicates, message]
+                : [
+                    ...messagesWithoutDuplicates.slice(0, insertIndex),
+                    message,
+                    ...messagesWithoutDuplicates.slice(insertIndex),
+                  ];
+              
+              // Garante que a mensagem tem a direção correta
+              const finalMessage = {
+                ...message,
+                direction: messageDirection, // Força a direção correta
+              };
+              
+              // Substitui a mensagem inserida pela versão final com direção garantida
+              const finalMessages = updatedMessages.map((msg) => {
+                // Substitui a mensagem que corresponde ao ID ou wamid pela versão final
+                if (msg.id === messageId || msg.wamid === messageWamid) {
+                  return finalMessage;
+                }
+                return msg;
+              });
+              
+              // Ordena novamente por timestamp para garantir ordem correta
+              finalMessages.sort((a, b) => {
+                const timeA = getTimestamp(a);
+                const timeB = getTimestamp(b);
+                if (timeA !== timeB) {
+                  return timeA - timeB;
+                }
+                // Se os timestamps forem iguais, ordena por ID para estabilidade
+                const idA = a.id || a.wamid || "";
+                const idB = b.id || b.wamid || "";
+                return idA.localeCompare(idB);
+              });
+              
+              const updated = {
+                ...previous,
+                messages: finalMessages,
+                lastMessageAt: messageTimestamp > getTimestamp(previous) ? message.timestamp : previous.lastMessageAt,
+                lastAgentMessageAt: message.timestamp,
+              };
+              
+              console.log("✅ Mensagem otimista substituída e reordenada:", {
+                totalMessages: finalMessages.length,
+                direction: messageDirection,
+                insertIndex: insertIndex === -1 ? "final" : insertIndex,
+                finalOrder: finalMessages.map((m, i) => ({
+                  index: i,
+                  direction: m.direction,
+                  timestamp: m.timestamp,
+                  text: m.content?.text?.substring(0, 20),
+                })),
+              });
+              
+              return updated;
+            }
+          }
+
+          console.log("✅ Adicionando nova mensagem ao estado (não é substituição)");
+          
+          // Garante que a mensagem tem a direção correta antes de inserir
+          const messageWithDirection = {
+            ...message,
+            direction: messageDirection, // Força a direção correta
+          };
+          
+          // Insere a mensagem na posição correta baseada no timestamp
+          const insertIndex = existingMessages.findIndex(
+            (item) => getTimestamp(item) > messageTimestamp
+          );
+          
+          const updatedMessages = insertIndex === -1
+            ? [...existingMessages, messageWithDirection]
+            : [
+                ...existingMessages.slice(0, insertIndex),
+                messageWithDirection,
+                ...existingMessages.slice(insertIndex),
+              ];
+          
+          // Ordena novamente por timestamp para garantir ordem correta (caso algum timestamp esteja incorreto)
+          updatedMessages.sort((a, b) => {
+            const timeA = getTimestamp(a);
+            const timeB = getTimestamp(b);
+            if (timeA !== timeB) {
+              return timeA - timeB;
+            }
+            // Se os timestamps forem iguais, ordena por ID para estabilidade
+            const idA = a.id || a.wamid || "";
+            const idB = b.id || b.wamid || "";
+            return idA.localeCompare(idB);
+          });
+          
+          // Atualiza a conversa com a nova mensagem na posição correta
+          const updated = {
+            ...previous,
+            messages: updatedMessages,
+            lastMessageAt: messageTimestamp > getTimestamp(previous) ? message.timestamp : previous.lastMessageAt,
+          };
+
+          // Se a mensagem é do cliente, atualiza lastCustomerMessageAt localmente
+          if (isInboundMessage) {
+            updated.lastCustomerMessageAt = message.timestamp;
+            
+            // Atualiza a elegibilidade localmente quando o cliente responde
+            if (updated.eligibility) {
+              updated.eligibility = {
+                ...updated.eligibility,
+                canSend: true,
+                attemptsCount: 0,
+                limitReached: false,
+                isBlockedByTime: false,
+                blockedUntil: null,
+                windowStart: null,
+                lastMessageFromCustomer: true,
+                lastCustomerMessageAt: message.timestamp,
+              };
+            } else {
+              scheduleFetchEligibility(800);
+            }
+          } else {
+            // Se a mensagem é do operador, atualiza lastAgentMessageAt localmente
+            updated.lastAgentMessageAt = message.timestamp;
+            
+            if (updated.eligibility) {
+              const currentAttempts = updated.eligibility.attemptsCount || 0;
+              updated.eligibility = {
+                ...updated.eligibility,
+                attemptsCount: Math.min(currentAttempts + 1, updated.eligibility.attemptsLimit || 2),
+                lastAgentMessageAt: message.timestamp,
+                lastMessageFromCustomer: false,
+              };
+            }
+          }
+
+          console.log("✅ Mensagem adicionada na posição correta:", {
+            insertIndex: insertIndex === -1 ? "final" : insertIndex,
+            totalMessages: updatedMessages.length,
+            direction: messageDirection,
+            timestamp: message.timestamp,
+            finalOrder: updatedMessages.map((m, i) => ({
+              index: i,
+              direction: m.direction,
+              timestamp: m.timestamp,
+              text: m.content?.text?.substring(0, 20),
+            })),
+          });
+
+          return updated;
+        });
       }
     };
 
     const handleUnassigned = (payload) => {
       console.log("📨 conversation:unassigned recebido:", payload);
       if (payload?.conversationId === conversationId) {
-        scheduleFetchConversation(0);
+        // Atualiza o estado local se necessário (sem recarregar a conversa)
+        // A conversa será atualizada via socket quando necessário
+        setConversation((previous) => {
+          if (!previous || previous.id !== conversationId) {
+            return previous;
+          }
+          return {
+            ...previous,
+            operatorId: null,
+            operator: null,
+          };
+        });
+      }
+    };
+
+    const handleMessageStatusUpdate = (payload) => {
+      console.log("📨 message:status recebido:", payload);
+      const { conversationId: payloadConversationId, messageId, status, wamid } = payload ?? {};
+      
+      if (!payloadConversationId || (!messageId && !wamid) || !status) {
+        return;
+      }
+
+      // Se a atualização é para esta conversa, atualiza apenas o status da mensagem específica
+      // Atualização otimizada: apenas atualiza o status sem recriar toda a estrutura
+      if (payloadConversationId === conversationId) {
+        setConversation((previous) => {
+          if (!previous || previous.id !== conversationId || !previous.messages) {
+            return previous;
+          }
+
+          const existingMessages = previous.messages;
+          
+          // Verifica se alguma mensagem precisa ser atualizada
+          const needsUpdate = existingMessages.some(
+            (msg) => {
+              // Compara por ID
+              if (messageId && msg.id && msg.id === messageId) {
+                return msg.status !== status;
+              }
+              // Compara por wamid
+              if (wamid && msg.wamid && msg.wamid === wamid) {
+                return msg.status !== status;
+              }
+              // Compara messageId com wamid
+              if (messageId && msg.wamid && msg.wamid === messageId) {
+                return msg.status !== status;
+              }
+              // Compara wamid com id
+              if (wamid && msg.id && msg.id === wamid) {
+                return msg.status !== status;
+              }
+              return false;
+            }
+          );
+
+          // Se nenhuma mensagem precisa ser atualizada, retorna o estado anterior (evita re-render)
+          if (!needsUpdate) {
+            return previous;
+          }
+
+          // Atualiza apenas o status da mensagem específica (sem recarregar a conversa)
+          const updatedMessages = existingMessages.map((msg) => {
+            // Compara por ID
+            if (messageId && msg.id && msg.id === messageId) {
+              return { ...msg, status, ...(wamid && !msg.wamid ? { wamid } : {}) };
+            }
+            // Compara por wamid
+            if (wamid && msg.wamid && msg.wamid === wamid) {
+              return { ...msg, status };
+            }
+            // Compara messageId com wamid
+            if (messageId && msg.wamid && msg.wamid === messageId) {
+              return { ...msg, status, ...(wamid && !msg.wamid ? { wamid } : {}) };
+            }
+            // Compara wamid com id
+            if (wamid && msg.id && msg.id === wamid) {
+              return { ...msg, status };
+            }
+            // Mantém a mensagem inalterada
+            return msg;
+          });
+
+          console.log("✅ Status da mensagem atualizado em tempo real (sem reload):", messageId || wamid, "->", status);
+
+          // Retorna novo objeto apenas se houve mudança (React otimiza isso)
+          return {
+            ...previous,
+            messages: updatedMessages,
+          };
+        });
       }
     };
 
     activeSocket.on("new_conversation", handleNewConversation);
     activeSocket.on("new_message", handleNewMessage);
     activeSocket.on("conversation:unassigned", handleUnassigned);
+    activeSocket.on("message:status", handleMessageStatusUpdate);
 
     return () => {
       activeSocket.off("new_conversation", handleNewConversation);
       activeSocket.off("new_message", handleNewMessage);
       activeSocket.off("conversation:unassigned", handleUnassigned);
+      activeSocket.off("message:status", handleMessageStatusUpdate);
     };
-  }, [activeSocket, conversationId, scheduleFetchConversation]);
+  }, [activeSocket, conversationId, scheduleFetchEligibility]);
 
   useEffect(() => {
     return () => {
@@ -996,15 +1515,38 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
 
     return (
       <Box className={classes.messageList} display="flex" flexDirection="column" gridGap={16}>
-        {sortedMessages.map((message) => {
-          const isOutbound = message.direction === "OUTBOUND";
+        {sortedMessages.map((message, index) => {
+          // Garante que a mensagem tem direção válida
+          // Se não tiver, tenta inferir baseado em outras propriedades ou assume INBOUND
+          let messageDirection = message.direction;
+          if (!messageDirection || (messageDirection !== "INBOUND" && messageDirection !== "OUTBOUND")) {
+            // Se a mensagem tem ID temporário (temp-), provavelmente é OUTBOUND (do operador)
+            if (message.id?.startsWith("temp-")) {
+              messageDirection = "OUTBOUND";
+            } else {
+              // Por padrão, assume INBOUND se não conseguir determinar
+              messageDirection = "INBOUND";
+              console.warn("⚠️ Mensagem sem direção válida, assumindo INBOUND:", {
+                id: message.id,
+                wamid: message.wamid,
+                index,
+              });
+            }
+          }
+          
+          const isOutbound = messageDirection === "OUTBOUND";
+          
+          // Chave estável para evitar recriação de componentes quando apenas o status muda
+          const messageKey = message.id || message.wamid || `temp-${message.timestamp}-${messageDirection}-${index}`;
+          
           return (
             <Box
-              key={message.id || message.wamid || Math.random()}
+              key={messageKey}
               className={[
                 classes.messageItem,
                 isOutbound ? classes.outboundMessage : classes.inboundMessage,
               ].join(" ")}
+              title={`Direção: ${messageDirection} | Timestamp: ${message.timestamp} | ID: ${message.id || message.wamid || "temp"}`}
             >
               <Typography variant="body1">
                 {message.type === "text"
@@ -1023,6 +1565,12 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
                 <Typography variant="caption">
                   {formatDateTime(message.timestamp)}
                 </Typography>
+                {/* Debug: mostra a direção da mensagem (pode remover depois) */}
+                {process.env.NODE_ENV === "development" && (
+                  <Typography variant="caption" style={{ fontSize: "10px", opacity: 0.6 }}>
+                    [{messageDirection}]
+                  </Typography>
+                )}
               </Box>
             </Box>
           );

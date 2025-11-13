@@ -331,6 +331,12 @@ export class IncomingMessagesProcessor extends WorkerHost {
       this.logger.log(`Saved incoming message ${messageId} to conversation ${conversation.id}`);
 
       // Emit WebSocket event to operator
+      // Garante que o campo direction está sempre presente e correto (INBOUND para mensagens do cliente)
+      const messageWithDirection = {
+        ...savedMessage,
+        direction: 'INBOUND', // Garante que sempre tenha direction: INBOUND para mensagens do cliente
+      };
+
       if (conversation.operatorId) {
         if (isNewConversation) {
           // Notify operator about new conversation
@@ -344,20 +350,20 @@ export class IncomingMessagesProcessor extends WorkerHost {
               lastAssignedAt: conversation.lastAssignedAt,
               operatorId: conversation.operatorId,
             },
-            message: savedMessage,
+            message: messageWithDirection, // Usa messageWithDirection com direction garantido
           });
         } else {
           // Notify operator about new message in existing conversation
           this.eventsGateway.emitToOperator(conversation.operatorId, 'new_message', {
             conversationId: conversation.id,
             operatorId: conversation.operatorId,
-            message: savedMessage,
+            message: messageWithDirection, // Usa messageWithDirection com direction garantido
           });
         }
       } else {
         this.eventsGateway.emitToAllOperators('conversation:unassigned', {
           conversationId: conversation.id,
-          message: savedMessage,
+          message: messageWithDirection, // Usa messageWithDirection com direction garantido
         });
       }
 

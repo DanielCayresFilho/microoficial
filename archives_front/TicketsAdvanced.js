@@ -427,10 +427,29 @@ const TicketsAdvanced = () => {
         setConversations((previous) => {
           const existing = previous.find((item) => item.id === conversationId);
           if (!existing) {
-            // Se não existe, pode ser uma nova conversa para este operador
-            // Vamos buscar as conversas novamente
-            loadConversations();
-            return previous;
+            // Se não existe, adiciona uma conversa básica localmente
+            // A conversa completa será carregada quando o usuário selecionar
+            const newConversation = {
+              id: conversationId,
+              messages: [message],
+              lastMessageAt: message.timestamp,
+              status: "OPEN",
+            };
+            
+            // Adiciona indicador de nova mensagem se não for a conversa selecionada
+            if (conversationId !== selectedConversationId) {
+              setUnreadMessages((prev) => ({
+                ...prev,
+                [conversationId]: (prev[conversationId] || 0) + 1,
+              }));
+            }
+            
+            // Ordena por última mensagem
+            return [...previous, newConversation].sort((a, b) => {
+              const dateA = new Date(a.lastMessageAt || 0);
+              const dateB = new Date(b.lastMessageAt || 0);
+              return dateB - dateA;
+            });
           }
           
           // Atualiza a conversa existente
@@ -481,7 +500,22 @@ const TicketsAdvanced = () => {
 
     const handleUnassigned = (payload) => {
       console.log("📨 [TicketsAdvanced] conversation:unassigned recebido:", payload);
-      loadConversations();
+      // Não recarrega todas as conversas, apenas atualiza a conversa específica se necessário
+      // A conversa será atualizada quando o usuário selecionar ou quando receber mensagem
+      if (payload?.conversationId) {
+        setConversations((previous) => {
+          return previous.map((conversation) => {
+            if (conversation.id === payload.conversationId) {
+              return {
+                ...conversation,
+                operatorId: null,
+                operator: null,
+              };
+            }
+            return conversation;
+          });
+        });
+      }
     };
 
     // Adiciona listener para todos os tipos de eventos de mensagem
@@ -526,7 +560,6 @@ const TicketsAdvanced = () => {
     };
   }, [
     activeSocket,
-    loadConversations,
     operatorId,
     selectedConversationId,
     upsertConversation,

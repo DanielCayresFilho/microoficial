@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { addHours, differenceInHours, isAfter } from 'date-fns';
 import {
   ConversationEventDirection,
@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { EventsGateway } from '../events/events.gateway';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CloseConversationDto } from './dto/close-conversation.dto';
 import { SetCpcStatusDto } from './dto/set-cpc-status.dto';
@@ -23,6 +24,8 @@ export class ConversationsService {
   constructor(
     private prisma: PrismaService,
     private whatsappService: WhatsAppService,
+    @Inject(forwardRef(() => EventsGateway))
+    private eventsGateway: EventsGateway,
   ) {}
 
   private computeEligibility(conversation: Conversation, now: Date) {
@@ -281,6 +284,22 @@ export class ConversationsService {
           text: dto.text,
         },
       });
+
+      // Emit WebSocket event to operator with message (including direction field)
+      // Garante que o campo direction está sempre presente e correto
+      const messageWithDirection = {
+        ...savedMessage,
+        direction: 'OUTBOUND', // Garante que sempre tenha direction: OUTBOUND
+      };
+
+      if (conversation.operatorId) {
+        this.eventsGateway.emitToOperator(conversation.operatorId, 'new_message', {
+          conversationId: conversation.id,
+          operatorId: conversation.operatorId,
+          message: messageWithDirection,
+        });
+        this.logger.debug(`Emitted new_message event to operator ${conversation.operatorId} for message ${messageId}`);
+      }
 
       this.logger.log(`Message sent to conversation ${conversationId}: ${messageId}`);
 

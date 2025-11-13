@@ -1,8 +1,9 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject, forwardRef } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../queue.constants';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EventsGateway } from '../../events/events.gateway';
 
 interface MessageStatusJobData {
   messageId: string;
@@ -19,7 +20,11 @@ interface MessageStatusJobData {
 export class MessageStatusProcessor extends WorkerHost {
   private readonly logger = new Logger(MessageStatusProcessor.name);
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => EventsGateway))
+    private eventsGateway: EventsGateway,
+  ) {
     super();
   }
 
@@ -49,7 +54,7 @@ export class MessageStatusProcessor extends WorkerHost {
       }
 
       // Update message status
-      await this.prisma.message.update({
+      const updatedMessage = await this.prisma.message.update({
         where: { id: message.id },
         data: {
           status: status.toUpperCase(),
@@ -81,6 +86,24 @@ export class MessageStatusProcessor extends WorkerHost {
             },
           });
         }
+      }
+
+      // Emit WebSocket event to operator about status update
+      // Garante que o campo direction está sempre presente
+      if (message.conversation?.operatorId) {
+        // Usa a direção original da mensagem (message.direction) que já estava presente antes da atualização
+        const messageDirection = message.direction || 'OUTBOUND'; // Fallback para OUTBOUND se não tiver direção
+        
+        this.eventsGateway.emitToOperator(message.conversation.operatorId, 'message:status', {
+          conversationId: message.conversationId,
+          messageId: updatedMessage.id,
+          wamid: updatedMessage.wamid || updatedMessage.messageId || messageId,
+          status: status.toUpperCase(),
+          direction: messageDirection, // Preserva a direção original da mensagem (INBOUND ou OUTBOUND)
+        });
+        this.logger.debug(
+          `Emitted message:status event to operator ${message.conversation.operatorId} for message ${messageId}: ${status} (direction: ${messageDirection})`,
+        );
       }
 
       this.logger.log(`Updated message ${messageId} status to ${status}`);
