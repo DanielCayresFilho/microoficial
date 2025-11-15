@@ -18,6 +18,7 @@ import { TabulationsModule } from './tabulations/tabulations.module';
 import { OperatorsModule } from './operators/operators.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { TemplatesModule } from './templates/templates.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { TemplatesModule } from './templates/templates.module';
     OperatorsModule,
     SchedulerModule,
     TemplatesModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [

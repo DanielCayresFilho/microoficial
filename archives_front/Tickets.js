@@ -21,13 +21,22 @@ import {
   TextField,
   Tooltip,
   Typography,
+  Avatar,
 } from "@material-ui/core";
+import MenuItem from "@material-ui/core/MenuItem";
 import { makeStyles } from "@material-ui/core/styles";
 import RefreshIcon from "@material-ui/icons/Refresh";
 import SendIcon from "@material-ui/icons/Send";
 import CloseIcon from "@material-ui/icons/CheckCircleOutline";
 import AssignmentIndIcon from "@material-ui/icons/AssignmentInd";
 import MessageIcon from "@material-ui/icons/Message";
+import AttachFileIcon from "@material-ui/icons/AttachFile";
+import InsertEmoticonIcon from "@material-ui/icons/InsertEmoticon";
+import MicIcon from "@material-ui/icons/Mic";
+import MoreVertIcon from "@material-ui/icons/MoreVert";
+import SearchIcon from "@material-ui/icons/Search";
+import DoneIcon from "@material-ui/icons/Done";
+import DoneAllIcon from "@material-ui/icons/DoneAll";
 import { format } from "date-fns";
 import io from "socket.io-client";
 import {
@@ -40,158 +49,332 @@ import { SocketContext } from "../../context/Socket/SocketContext";
 
 const useStyles = makeStyles((theme) => ({
   root: {
-    minHeight: "100vh",
-    padding: theme.spacing(2),
-    background: "linear-gradient(180deg, #0b141a 0%, #111b21 45%, #202c33 100%)",
-    color: "#d1d7db",
+    height: "100%",
     display: "flex",
     flexDirection: "column",
-    gap: theme.spacing(2),
+    overflow: "hidden",
+    position: "relative",
   },
-  header: {
-    display: "flex",
-    flexDirection: "column",
-    gap: theme.spacing(2),
-    backgroundColor: "#202c33",
-    borderRadius: 16,
-    padding: theme.spacing(2),
-    border: "1px solid #2a3942",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-  },
-  headerRow: {
+  // Header do chat - estilo WhatsApp
+  chatHeader: {
+    height: 60,
+    backgroundColor: theme.palette.type === 'dark' ? "#202c33" : "#f0f2f5",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: theme.spacing(2),
+    padding: "0 16px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+    zIndex: 100,
   },
-  infoCard: {
-    borderRadius: 20,
-    backgroundColor: "#202c33",
-    border: "1px solid #2a3942",
-    color: "#e9edef",
-    boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    backgroundColor: theme.palette.type === 'dark' ? "#6a7175" : "#dfe5e7",
+    color: "#ffffff",
+    marginRight: 15,
   },
-  sectionTitle: {
-    fontWeight: 600,
-    marginBottom: theme.spacing(1),
-    color: "#8696a0",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    fontSize: "0.85rem",
-  },
-  messageList: {
-    maxHeight: "calc(100vh - 420px)",
-    minHeight: "50vh",
-    overflowY: "auto",
-    padding: theme.spacing(3),
-    borderRadius: 18,
-    border: "1px solid #2a3942",
-    backgroundImage:
-      "url('https://www.transparenttextures.com/patterns/asfalt-dark.png'), linear-gradient(180deg,#0b141a,#111b21)",
-    backgroundColor: "#0b141a",
-  },
-  messageItem: {
-    padding: theme.spacing(1.5),
-    borderRadius: 12,
-    maxWidth: "68%",
-    wordBreak: "break-word",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-    display: "flex",
-    flexDirection: "column",
-    gap: theme.spacing(0.5),
-  },
-  inboundMessage: {
-    backgroundColor: "#202c33",
-    color: "#e9edef",
-    alignSelf: "flex-start",
-    borderTopLeftRadius: 0,
-  },
-  outboundMessage: {
-    backgroundColor: "#005c4b",
-    color: "#fff",
-    alignSelf: "flex-end",
-    borderTopRightRadius: 0,
-  },
-  metaRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: theme.spacing(1),
-    flexWrap: "wrap",
-    color: "#8696a0",
-    fontSize: "0.75rem",
-  },
-  messageFooter: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing(2),
-    color: "#aebac1",
-  },
-  presenceWrapper: {
-    display: "flex",
-    flexDirection: "column",
-    gap: theme.spacing(1.5),
-    minWidth: 260,
-  },
-  presenceControls: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: theme.spacing(1),
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  presenceChip: {
-    fontWeight: 600,
-    backgroundColor: "#005c4b",
-    color: "#e9edef",
-  },
-  emptyState: {
-    padding: theme.spacing(8, 2),
-    textAlign: "center",
-    color: "#8696a0",
-  },
-  formContainer: {
-    padding: theme.spacing(2),
-    borderRadius: 16,
-    border: "1px solid #2a3942",
-    backgroundColor: "#202c33",
-    color: "#e9edef",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-  },
-  errorBanner: {
-    padding: theme.spacing(2),
-    borderRadius: theme.spacing(1),
-    backgroundColor: "#3b4252",
-    color: "#fdd835",
-    display: "flex",
-    alignItems: "center",
-    gap: theme.spacing(2),
-  },
-  stackColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: theme.spacing(2),
-  },
-  stackRow: {
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing(1),
-  },
-  stackColumnSmall: {
-    display: "flex",
-    flexDirection: "column",
-    gap: theme.spacing(1),
-  },
-  chatGrid: {
+  headerInfo: {
     flex: 1,
   },
-  chatPane: {
-    backgroundColor: "transparent",
+  headerName: {
+    fontSize: 16,
+    fontWeight: 500,
+    color: theme.palette.type === 'dark' ? "#e9edef" : "#111b21",
+    lineHeight: "21px",
   },
-  sidePane: {
+  headerStatus: {
+    fontSize: 13,
+    color: theme.palette.type === 'dark' ? "#8696a0" : "#667781",
+    lineHeight: "19px",
+  },
+  headerActions: {
+    display: "flex",
+    gap: 10,
+  },
+  headerIconButton: {
+    color: theme.palette.type === 'dark' ? "#aebac1" : "#54656f",
+    padding: 8,
+  },
+  // Container principal com 2 painéis
+  mainContainer: {
+    flex: 1,
+    display: "flex",
+    overflow: "hidden",
+    position: "relative",
+  },
+  // Área do chat
+  chatArea: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    position: "relative",
+  },
+  // Lista de mensagens - estilo WhatsApp
+  messageList: {
+    flex: 1,
+    overflowY: "auto",
+    overflowX: "hidden",
+    padding: "20px 0",
+    backgroundColor: theme.palette.type === 'dark' ? "#0a1014" : "#efeae2",
+    position: "relative",
+    "&::-webkit-scrollbar": {
+      width: 6,
+    },
+    "&::-webkit-scrollbar-track": {
+      background: "transparent",
+    },
+    "&::-webkit-scrollbar-thumb": {
+      background: theme.palette.type === 'dark' ? "#374045" : "#cccccc",
+    },
+  },
+  // Container de mensagem
+  messageRow: {
+    display: "flex",
+    padding: "2px 0",
+    paddingLeft: "9%",
+    paddingRight: "9%",
+    "&.inbound": {
+      justifyContent: "flex-start",
+    },
+    "&.outbound": {
+      justifyContent: "flex-end",
+    },
+  },
+  // Balão de mensagem - estilo WhatsApp
+  messageBubble: {
+    position: "relative",
+    maxWidth: "65%",
+    borderRadius: 8,
+    padding: "8px 12px",
+    boxShadow: "0 1px 0.5px rgba(0,0,0,0.13)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    "&.inbound": {
+      backgroundColor: theme.palette.type === 'dark' ? "#202c33" : "#ffffff",
+      borderTopLeftRadius: 0,
+      "&::before": {
+        content: '""',
+        position: "absolute",
+        top: 0,
+        left: -8,
+        width: 0,
+        height: 0,
+        borderStyle: "solid",
+        borderWidth: "0 8px 10px 0",
+        borderColor: `transparent ${theme.palette.type === 'dark' ? "#202c33" : "#ffffff"} transparent transparent`,
+      },
+    },
+    "&.outbound": {
+      backgroundColor: theme.palette.type === 'dark' ? "#005c4b" : "#d9fdd3",
+      borderTopRightRadius: 0,
+      "&::after": {
+        content: '""',
+        position: "absolute",
+        top: 0,
+        right: -8,
+        width: 0,
+        height: 0,
+        borderStyle: "solid",
+        borderWidth: "0 0 10px 8px",
+        borderColor: `transparent transparent transparent ${theme.palette.type === 'dark' ? "#005c4b" : "#d9fdd3"}`,
+      },
+    },
+  },
+  messageText: {
+    fontSize: 14.2,
+    lineHeight: "19px",
+    color: theme.palette.type === 'dark' ? "#e9edef" : "#111b21",
+    margin: 0,
+    wordBreak: "break-word",
+  },
+  messageTime: {
+    fontSize: 11,
+    color: theme.palette.type === 'dark' ? "#8696a0" : "#667781",
+    marginLeft: 4,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+  },
+  messageStatus: {
+    width: 16,
+    height: 11,
+    color: theme.palette.type === 'dark' ? "#53bdeb" : "#53bdeb",
+  },
+  // Barra de input - estilo WhatsApp
+  inputBar: {
+    backgroundColor: theme.palette.type === 'dark' ? "#202c33" : "#f0f2f5",
+    padding: "10px 16px",
+    display: "flex",
+    alignItems: "flex-end",
+    gap: 10,
+    borderTop: theme.palette.type === 'dark' ? "1px solid #2a3942" : "1px solid #e9edef",
+  },
+  inputContainer: {
+    flex: 1,
+    backgroundColor: theme.palette.type === 'dark' ? "#2a3942" : "#ffffff",
+    borderRadius: 25,
+    display: "flex",
+    alignItems: "flex-end",
+    padding: "5px 14px",
+  },
+  messageInput: {
+    flex: 1,
+    border: "none",
+    outline: "none",
     backgroundColor: "transparent",
+    resize: "none",
+    fontFamily: "inherit",
+    fontSize: 15,
+    lineHeight: "20px",
+    maxHeight: 100,
+    overflowY: "auto",
+    color: theme.palette.type === 'dark' ? "#e9edef" : "#3b4a54",
+    "&::placeholder": {
+      color: theme.palette.type === 'dark' ? "#8696a0" : "#667781",
+    },
+  },
+  inputIconButton: {
+    color: theme.palette.type === 'dark' ? "#8696a0" : "#54656f",
+    padding: 8,
+  },
+  sendButton: {
+    backgroundColor: theme.palette.type === 'dark' ? "#005c4b" : "#00a884",
+    color: "#ffffff",
+    padding: 10,
+    "&:hover": {
+      backgroundColor: theme.palette.type === 'dark' ? "#06846b" : "#00a884",
+    },
+  },
+  // Painel direito - Informações
+  infoPanel: {
+    width: 380,
+    backgroundColor: theme.palette.type === 'dark' ? "#1a2329" : "#f0f2f5",
+    borderLeft: theme.palette.type === 'dark' ? "1px solid #3b4a54" : "1px solid #e9edef",
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
+  },
+  infoPanelHeader: {
+    backgroundColor: theme.palette.type === 'dark' ? "#232d36" : "#ffffff",
+    padding: "20px",
+    textAlign: "center",
+    borderBottom: theme.palette.type === 'dark' ? "1px solid #3b4a54" : "1px solid #e9edef",
+  },
+  infoPanelAvatar: {
+    width: 80,
+    height: 80,
+    margin: "0 auto 16px",
+    backgroundColor: theme.palette.type === 'dark' ? "#00a884" : "#dfe5e7",
+    color: "#ffffff",
+    fontSize: 36,
+  },
+  infoPanelSection: {
+    backgroundColor: theme.palette.type === 'dark' ? "#232d36" : "#ffffff",
+    marginBottom: 10,
+    padding: "14px 20px",
+    borderRadius: 8,
+    border: theme.palette.type === 'dark' ? "1px solid #3b4a54" : "none",
+  },
+  infoPanelLabel: {
+    fontSize: 14,
+    color: theme.palette.type === 'dark' ? "#aebac1" : "#00a884",
+    marginBottom: 8,
+  },
+  infoPanelValue: {
+    fontSize: 16,
+    color: theme.palette.type === 'dark' ? "#e9edef" : "#111b21",
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: 600,
+    // Títulos das seções do painel direito:
+    // "Dados do Cliente", "Status CPC" e "Encerrar Conversa"
+    color: theme.palette.type === 'dark' ? "#00d9a6" : "#00a884",
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  // Estados vazios
+  emptyState: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    color: theme.palette.type === 'dark' ? "#667781" : "#54656f",
+    padding: 40,
+    textAlign: "center",
+  },
+  // Indicador de online/offline
+  presenceChip: {
+    backgroundColor: theme.palette.type === 'dark' ? "#00d9a6" : "#00a884",
+    color: theme.palette.type === 'dark' ? "#111b21" : "#ffffff",
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  // Formulário
+  formField: {
+    marginBottom: 16,
+    "& .MuiOutlinedInput-root": {
+      // Fundo dos inputs (Nome, Contrato, CPF, Tabulação, Observações)
+      backgroundColor: theme.palette.type === 'dark' ? "#1a2329" : "#ffffff",
+      borderRadius: 8,
+      "& fieldset": {
+        // Borda padrão dos campos
+        borderColor: theme.palette.type === 'dark' ? "#3b4a54" : "#e9edef",
+        borderWidth: 1.5,
+      },
+      "&:hover fieldset": {
+        // Borda ao passar o mouse
+        borderColor: theme.palette.type === 'dark' ? "#00d9a6" : "#00a884",
+      },
+      "&.Mui-focused fieldset": {
+        // Borda em foco (verde WhatsApp)
+        borderColor: theme.palette.type === 'dark' ? "#00d9a6" : "#00a884",
+        borderWidth: 2,
+      },
+    },
+    // Campos de texto (valores digitados) de "Nome", "Contrato" e "CPF"
+    "& input": {
+      color: theme.palette.type === 'dark' ? "#e9edef" : "#111b21",
+      backgroundColor: theme.palette.type === 'dark' ? "#1a2329" : "#ffffff",
+    },
+    "& textarea": {
+      color: theme.palette.type === 'dark' ? "#e9edef" : "#111b21",
+      backgroundColor: theme.palette.type === 'dark' ? "#1a2329" : "#ffffff",
+    },
+    // Labels "Nome", "Contrato" e "CPF"
+    "& label": {
+      color: (props) => (props.type === 'dark' ? "#aebac1" : "#667781"),
+      backgroundColor: "transparent",
+      fontWeight: 500,
+    },
+    "& label.Mui-focused": {
+      color: theme.palette.type === 'dark' ? "#00d9a6" : "#00a884",
+    },
+    "& .MuiFormHelperText-root": {
+      color: theme.palette.type === 'dark' ? "#8696a0" : "#667781",
+    },
+  },
+  // Label externo para campos
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    marginBottom: 8,
+    color: theme.palette.type === 'dark' ? "#e9edef" : "#111b21",
+    display: "block",
+  },
+  // Banner de erro/bloqueio
+  warningBanner: {
+    margin: "0 16px 10px",
+    padding: "12px 16px",
+    backgroundColor: theme.palette.type === 'dark' ? "#3a2f1a" : "#fff5e6",
+    borderRadius: 8,
+    border: theme.palette.type === 'dark' ? "1px solid #665a3d" : "1px solid #ffd79c",
+  },
+  warningText: {
+    fontSize: 13,
+    color: theme.palette.type === 'dark' ? "#ffcb77" : "#8b6914",
   },
 }));
 
@@ -227,6 +410,11 @@ const SOCKET_BASE_URL = resolveSocketBaseUrl();
 const SOCKET_HOST_SIGNATURE = SOCKET_BASE_URL.replace(/^https?:\/\//, "").toLowerCase();
 const GLOBAL_SOCKET_KEY = "__vendOfficialMicroserviceSocket";
 
+const WHATSAPP_LIGHT_BG =
+  'url("https://web.whatsapp.com/img/bg-chat-tile_3b737797b77b7508b49a99446d6ac11d.png")';
+const WHATSAPP_DARK_BG =
+  'url("https://web.whatsapp.com/img/bg-chat-tile-dark_e534b4729b044c2b27a26ddfd4e52ca5.png")';
+
 const isSocketPointingToMicroservice = (socket) => {
   if (!socket || !socket.io) {
     return false;
@@ -248,16 +436,23 @@ const isSocketPointingToMicroservice = (socket) => {
 
 const formatDateTime = (value) => {
   try {
-    // Formata incluindo segundos para melhor precisão
     return format(new Date(value), "dd/MM/yyyy HH:mm:ss");
   } catch (error) {
     return "Data inválida";
   }
 };
 
+const formatMessageTime = (value) => {
+  try {
+    return format(new Date(value), "HH:mm");
+  } catch (error) {
+    return "";
+  }
+};
+
 const formatCpf = (value) => {
   if (!value) {
-    return "N/A";
+    return "";
   }
 
   const digits = String(value).replace(/\D/g, "");
@@ -277,13 +472,29 @@ const useOptionalConversationId = () => {
   }
 };
 
-const Tickets = ({ conversationId: conversationIdProp }) => {
-  const classes = useStyles();
+const getInitials = (name) => {
+  if (!name) return "?";
+  return name
+    .split(" ")
+    .map(word => word[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+const Tickets = ({
+  conversationId: conversationIdProp,
+  darkMode = false,
+  onCustomerProfileSaved,
+  onConversationClosed,
+}) => {
+  const classes = useStyles({ type: darkMode ? 'dark' : 'light' });
   const conversationIdFromRoute = useOptionalConversationId();
   const conversationId = conversationIdProp ?? conversationIdFromRoute;
   const { user } = useContext(AuthContext);
   const socketManager = useContext(SocketContext);
   const messagesEndRef = useRef(null);
+  const messageInputRef = useRef(null);
 
   const resolveFromStorage = (key) => {
     if (typeof window === "undefined") {
@@ -441,33 +652,25 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
   const scrollToBottom = useCallback(() => {
     const node = messagesEndRef.current;
     if (node && typeof node.scrollIntoView === "function") {
-      // Usa scroll suave apenas quando necessário, instantâneo quando substituindo mensagem
       node.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, []);
 
-  // CRÍTICO: Scroll apenas quando o número de mensagens aumenta (nova mensagem)
-  // Não faz scroll quando uma mensagem existente é atualizada (ex: status, substituição)
   const previousMessagesCountRef = useRef(0);
   
   useEffect(() => {
     const currentMessagesCount = conversation?.messages?.length || 0;
     const previousCount = previousMessagesCountRef.current;
     
-    // Só faz scroll se o número de mensagens aumentou (nova mensagem adicionada)
-    // Não faz scroll se apenas uma mensagem existente foi atualizada
     if (currentMessagesCount > previousCount) {
-      // Pequeno delay para garantir que o DOM foi atualizado
       setTimeout(() => {
         scrollToBottom();
       }, 50);
     }
     
-    // Atualiza a referência
     previousMessagesCountRef.current = currentMessagesCount;
   }, [conversation?.messages?.length, scrollToBottom]);
   
-  // Scroll inicial quando a conversa é carregada
   useEffect(() => {
     if (conversation && conversation.messages && conversation.messages.length > 0) {
       setTimeout(() => {
@@ -486,36 +689,23 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         conversationId
       );
       
-      // CORREÇÃO: Garante que todas as mensagens tenham direction definida
       if (data?.messages && Array.isArray(data.messages)) {
         data.messages = data.messages.map(msg => {
-          // Se já tem direction válida, mantém
           if (msg.direction === "INBOUND" || msg.direction === "OUTBOUND") {
             return msg;
           }
           
-          // Tenta inferir a direção baseado em outros campos
-          let inferredDirection = "INBOUND"; // padrão
+          let inferredDirection = "INBOUND";
           
-          // Se tem operatorId, é mensagem do operador (OUTBOUND)
           if (msg.operatorId || msg.sentBy === operatorId || msg.from === operatorId) {
             inferredDirection = "OUTBOUND";
           }
-          // Se tem customerPhone como remetente, é do cliente (INBOUND)
           else if (msg.from && data.customerPhone && msg.from.includes(data.customerPhone.replace(/\D/g, ''))) {
             inferredDirection = "INBOUND";
           }
-          // Se tem status típico de mensagem enviada, provavelmente é OUTBOUND
           else if (msg.status === "SENT" || msg.status === "READ" || msg.status === "DELIVERED") {
             inferredDirection = "OUTBOUND";
           }
-          
-          console.log(`📍 Direção inferida para mensagem: ${inferredDirection}`, {
-            text: msg.content?.text?.substring(0, 30),
-            operatorId: msg.operatorId,
-            status: msg.status,
-            from: msg.from
-          });
           
           return {
             ...msg,
@@ -628,26 +818,21 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     setCustomerFormDirty(false);
   }, [conversation?.id, conversation?.customerProfile, conversation]);
 
-  // Memoiza mensagens ordenadas - Ordena por timestamp crescente (mais antigas primeiro)
   const sortedMessages = useMemo(() => {
     if (!conversation?.messages || !Array.isArray(conversation.messages)) {
       return [];
     }
     
-    // Ordena por timestamp crescente: mais antigas primeiro, mais novas por último
-    // Isso garante que as mensagens apareçam em ordem cronológica (antigas no topo, novas embaixo)
     return [...conversation.messages].sort((a, b) => {
       const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
       const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
       
-      // Se timestamps são iguais, ordena por ID para estabilidade
       if (timeA === timeB) {
         const idA = a.id || a.wamid || "";
         const idB = b.id || b.wamid || "";
         return idA.localeCompare(idB);
       }
       
-      // Ordena crescente: timeA < timeB = mensagem A vem antes de B
       return timeA - timeB;
     });
   }, [conversation?.messages]);
@@ -682,6 +867,9 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         payload
       );
       setConversation(updated);
+      if (typeof onCustomerProfileSaved === "function") {
+        onCustomerProfileSaved(updated);
+      }
       toast.success("Dados do cliente atualizados.");
       setCustomerFormDirty(false);
     } catch (err) {
@@ -709,7 +897,6 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     setSending(true);
     setError(null);
 
-    // Limpa o campo imediatamente para melhor UX
     setMessageText("");
 
     try {
@@ -718,16 +905,13 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         operatorId,
       });
       
-      // A mensagem real será recebida via WebSocket e aparecerá automaticamente
-      // Não criamos mensagem otimista - aguardamos a mensagem real do servidor
-      
     } catch (err) {
       const errorMessage = err?.response?.data?.message || err?.message || 
                           "Não foi possível enviar a mensagem. Tente novamente.";
       
       toast.error(errorMessage);
       setError(errorMessage);
-      setMessageText(messageToSend); // Restaura o texto em caso de erro
+      setMessageText(messageToSend);
     } finally {
       setSending(false);
     }
@@ -761,6 +945,10 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         };
       });
       
+      if (typeof onConversationClosed === "function") {
+        onConversationClosed(conversationId);
+      }
+
       setCloseNotes("");
       setSelectedTabulation("");
       
@@ -956,7 +1144,6 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     }
 
     const handleNewConversation = (payload) => {
-      console.log("📨 new_conversation recebido:", payload);
       const { conversation: convoPayload, message } = payload ?? {};
       if (!convoPayload?.id) {
         return;
@@ -996,42 +1183,26 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     };
 
     const handleNewMessage = (payload) => {
-      console.log("📨 new_message recebido:", payload);
       const { conversationId: msgConvId, message } = payload || {};
       
       if (!message || msgConvId !== conversationId) {
         return;
       }
       
-      // CORREÇÃO CRÍTICA: Garante que a mensagem sempre tem direction válida
-      // Se não tiver direction, tenta inferir, mas confia principalmente no backend
       if (!message.direction || (message.direction !== "INBOUND" && message.direction !== "OUTBOUND")) {
-        console.warn("⚠️ Mensagem sem direction válida, tentando inferir:", {
-          id: message.id,
-          wamid: message.wamid,
-          operatorId: message.operatorId,
-          status: message.status,
-        });
-        
-        // Se a mensagem tem operatorId ou foi enviada pelo operador, é OUTBOUND
         if (message.operatorId || payload?.operatorId) {
           message.direction = "OUTBOUND";
         } 
-        // Se não tem operatorId e tem status SENT/DELIVERED/READ, provavelmente é OUTBOUND (do operador)
         else if (message.status === "SENT" || message.status === "DELIVERED" || message.status === "READ") {
           message.direction = "OUTBOUND";
         } 
-        // Caso contrário, assume INBOUND (do cliente)
         else {
           message.direction = "INBOUND";
         }
-        
-        console.log(`📨 Direction inferida como ${message.direction} para mensagem:`, message.content?.text?.substring(0, 30));
       }
       
       const isInboundMessage = message.direction === "INBOUND";
       
-      // Função helper para normalizar timestamp
       const getTimestamp = (msg) => {
         if (!msg?.timestamp) return 0;
         const ts = new Date(msg.timestamp).getTime();
@@ -1044,60 +1215,49 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         const existingMessages = prev.messages || [];
         const messageTimestamp = getTimestamp(message);
         const messageText = message.content?.text?.trim();
-        const messageDirection = message.direction; // Já garantido acima
+        const messageDirection = message.direction;
         const messageId = message.id;
         const messageWamid = message.wamid;
         
-        // Verifica duplicata por ID ou wamid
         const isDuplicate = existingMessages.some(m => {
-          // Verifica por ID exato
           if (messageId && m.id && m.id === messageId) return true;
-          // Verifica por wamid exato
           if (messageWamid && m.wamid && m.wamid === messageWamid) return true;
           return false;
         });
         
         if (isDuplicate) {
-          console.log("⚠️ Mensagem duplicada ignorada:", messageId || messageWamid);
           return prev;
         }
         
-        // Adiciona nova mensagem (não há mais mensagens otimistas para substituir)
         const messageWithDirection = {
           ...message,
-          direction: messageDirection, // Garante direction correto (INBOUND ou OUTBOUND)
+          direction: messageDirection,
         };
         
-        // Adiciona a nova mensagem e reordena por timestamp
         const updatedMessages = [...existingMessages, messageWithDirection];
         
-        // REORDENA por timestamp para garantir ordem cronológica correta
         updatedMessages.sort((a, b) => {
           const timeA = getTimestamp(a);
           const timeB = getTimestamp(b);
           
           if (timeA !== timeB) {
-            return timeA - timeB; // Ordena crescente (antigas primeiro)
+            return timeA - timeB;
           }
           
-          // Se timestamps são iguais, ordena por ID para estabilidade
           const idA = a.id || a.wamid || "";
           const idB = b.id || b.wamid || "";
           return idA.localeCompare(idB);
         });
         
-        // Atualiza campos da conversa baseado na direção
         const updated = {
           ...prev,
           messages: updatedMessages,
           lastMessageAt: messageTimestamp > getTimestamp(prev) ? message.timestamp : prev.lastMessageAt,
         };
         
-        // Atualiza campos específicos baseado na direção
         if (isInboundMessage) {
           updated.lastCustomerMessageAt = message.timestamp;
           
-          // Atualiza elegibilidade quando cliente responde
           if (updated.eligibility) {
             updated.eligibility = {
               ...updated.eligibility,
@@ -1114,7 +1274,6 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
         } else {
           updated.lastAgentMessageAt = message.timestamp;
           
-          // Atualiza elegibilidade quando operador envia mensagem
           if (updated.eligibility) {
             const currentAttempts = updated.eligibility.attemptsCount || 0;
             updated.eligibility = {
@@ -1126,23 +1285,15 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
           }
         }
         
-        console.log("✅ Mensagem adicionada/atualizada:", {
-          direction: messageDirection,
-          totalMessages: updatedMessages.length,
-          timestamp: message.timestamp,
-        });
-        
         return updated;
       });
       
-      // Agenda atualização de elegibilidade se for mensagem INBOUND
       if (isInboundMessage) {
         scheduleFetchEligibility(800);
       }
     };
 
     const handleUnassigned = (payload) => {
-      console.log("📨 conversation:unassigned recebido:", payload);
       if (payload?.conversationId === conversationId) {
         setConversation((previous) => {
           if (!previous || previous.id !== conversationId) {
@@ -1157,9 +1308,7 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
       }
     };
 
-    // VERSÃO SIMPLIFICADA DO handleMessageStatusUpdate
     const handleMessageStatusUpdate = (payload) => {
-      console.log("📨 message:status recebido:", payload);
       const { conversationId: msgConvId, messageId, status, wamid } = payload || {};
       
       if (!msgConvId || (!messageId && !wamid) || !status || msgConvId !== conversationId) {
@@ -1216,184 +1365,33 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     };
   }, [activeSocket, clearHeartbeat, isOnline, operatorId]);
 
-  const renderHeader = () => {
-    if (!conversation) {
-      return null;
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
     }
+  };
 
-    return (
-      <Card className={classes.infoCard}>
-        <CardContent>
-          <Box className={classes.stackColumn}>
-            <Box className={classes.headerRow}>
-              <Box>
-                <Typography variant="h5" component="h2">
-                  Conversa #{conversation.id}
-                </Typography>
-                <Typography color="textSecondary">
-                  Cliente: {conversation.customerName ?? "Não identificado"} ·{" "}
-                  {conversation.customerPhone}
-                </Typography>
-              </Box>
-              <Box className={classes.stackRow}>
-                <Chip
-                  label={conversation.status}
-                  color={
-                    conversation.status === "OPEN" ? "primary" : "default"
-                  }
-                />
-                <Chip
-                  label={`Última atualização ${formatDateTime(
-                    conversation.lastMessageAt
-                  )}`}
-                  variant="outlined"
-                />
-                {eligibility && (
-                  <Chip
-                    label={`Repescagens ${manualAttemptsCount}/${manualAttemptsLimit}`}
-                    variant="outlined"
-                    color={manualLimitReached ? "secondary" : "default"}
-                  />
-                )}
-                {hasCpc && (
-                  <Chip color="secondary" label="CPC ativo" />
-                )}
-                <Tooltip title="Atualizar conversa">
-                  <IconButton onClick={fetchConversation}>
-                    <RefreshIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            </Box>
-
-            <Divider />
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
-                <Typography className={classes.sectionTitle}>
-                  Dados do número
-                </Typography>
-                <Box className={classes.stackColumnSmall}>
-                  <Typography variant="body2">
-                    Telefone: {conversation.number?.phoneNumber ?? "N/A"}
-                  </Typography>
-                  <Typography variant="body2">
-                    Display: {conversation.number?.displayName ?? "N/A"}
-                  </Typography>
-                  <Typography variant="body2">
-                    Conta: {conversation.number?.account?.name ?? "N/A"}
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
-                <Typography className={classes.sectionTitle}>
-                  Operador responsável
-                </Typography>
-                <Box className={classes.stackColumnSmall}>
-                  {conversation.operator ? (
-                    <>
-                      <Box className={classes.stackRow}>
-                        <AssignmentIndIcon fontSize="small" />
-                        <Typography variant="body2">
-                          {conversation.operator.name}
-                        </Typography>
-                      </Box>
-                      <Typography variant="body2">
-                        E-mail: {conversation.operator.email}
-                      </Typography>
-                    </>
-                  ) : (
-                    <Typography variant="body2">
-                      Conversa sem operador atribuído.
-                    </Typography>
-                  )}
-                </Box>
-              </Grid>
-              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
-                <Typography className={classes.sectionTitle}>
-                  Tabulação & Notas
-                </Typography>
-                <Box className={classes.stackColumnSmall}>
-                  <Typography variant="body2">
-                    Tabulação atual:{" "}
-                    {conversation.tabulation
-                      ? conversation.tabulation.name
-                      : "Não definida"}
-                  </Typography>
-                  {conversation.notes && (
-                    <Paper elevation={0} style={{ padding: "8px 12px" }}>
-                      <Typography variant="body2">
-                        {conversation.notes}
-                      </Typography>
-                    </Paper>
-                  )}
-                </Box>
-              </Grid>
-              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
-                <Typography className={classes.sectionTitle}>
-                  Dados do cliente
-                </Typography>
-                <form className={classes.stackColumnSmall} onSubmit={handleSaveCustomerProfile}>
-                  <TextField
-                    label="Nome"
-                    size="small"
-                    variant="outlined"
-                    value={customerForm.name}
-                    onChange={handleCustomerFieldChange("name")}
-                    disabled={isSavingCustomerProfile}
-                  />
-                  <TextField
-                    label="Contrato"
-                    size="small"
-                    variant="outlined"
-                    value={customerForm.contract}
-                    onChange={handleCustomerFieldChange("contract")}
-                    disabled={isSavingCustomerProfile}
-                  />
-                  <TextField
-                    label="CPF"
-                    size="small"
-                    variant="outlined"
-                    value={customerForm.cpf}
-                    onChange={handleCustomerFieldChange("cpf")}
-                    disabled={isSavingCustomerProfile}
-                    helperText="Somente números"
-                  />
-                  <Box className={classes.stackRow} justifyContent="space-between">
-                    <Typography variant="caption" color="textSecondary">
-                      Origem:{" "}
-                      {conversation.customerProfile?.source === "CAMPAIGN"
-                        ? "Campanha"
-                        : customerFormDirty
-                        ? "Edição em andamento"
-                        : "Manual"}
-                    </Typography>
-                    <Button
-                      type="submit"
-                      color="primary"
-                      variant="contained"
-                      disabled={!canSaveCustomerProfile}
-                      size="small"
-                    >
-                      {isSavingCustomerProfile ? "Salvando..." : "Salvar"}
-                    </Button>
-                  </Box>
-                </form>
-              </Grid>
-            </Grid>
-          </Box>
-        </CardContent>
-      </Card>
-    );
+  const renderMessageStatus = (status) => {
+    if (!status || status === "PENDING") {
+      return <DoneIcon className={classes.messageStatus} style={{ color: darkMode ? "#8696a0" : "#96a3ab" }} />;
+    }
+    if (status === "SENT" || status === "DELIVERED") {
+      return <DoneAllIcon className={classes.messageStatus} style={{ color: darkMode ? "#8696a0" : "#96a3ab" }} />;
+    }
+    if (status === "READ") {
+      return <DoneAllIcon className={classes.messageStatus} style={{ color: "#53bdeb" }} />;
+    }
+    return null;
   };
 
   const renderMessages = () => {
     if (loading) {
       return (
         <Box className={classes.emptyState}>
-          <CircularProgress />
+          <CircularProgress size={40} style={{ color: darkMode ? "#8696a0" : "#00a884" }} />
           <Typography variant="body2" style={{ marginTop: 16 }}>
-            Carregando histórico de mensagens...
+            Carregando mensagens...
           </Typography>
         </Box>
       );
@@ -1402,9 +1400,12 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     if (!conversationId) {
       return (
         <Box className={classes.emptyState}>
-          <MessageIcon fontSize="large" style={{ opacity: 0.4 }} />
-          <Typography variant="body2" style={{ marginTop: 16 }}>
-            Fique online para receber novos atendimentos ou selecione uma conversa da lista.
+          <MessageIcon fontSize="large" style={{ opacity: 0.3, fontSize: 100, marginBottom: 20 }} />
+          <Typography variant="h6" gutterBottom>
+            Vend - WhatsApp Oficial
+          </Typography>
+          <Typography variant="body2">
+            Selecione uma conversa para começar
           </Typography>
         </Box>
       );
@@ -1413,143 +1414,82 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     if (!sortedMessages.length) {
       return (
         <Box className={classes.emptyState}>
-          <MessageIcon fontSize="large" style={{ opacity: 0.4 }} />
-          <Typography variant="body2" style={{ marginTop: 16 }}>
-            Nenhuma mensagem registrada para esta conversa.
+          <MessageIcon fontSize="large" style={{ opacity: 0.3, fontSize: 80, marginBottom: 20 }} />
+          <Typography variant="body2">
+            Sem mensagens nesta conversa
           </Typography>
         </Box>
       );
     }
 
-    // RENDERIZAÇÃO DAS MENSAGENS COM LABELS "OPERADOR" E "CLIENTE"
-    // IMPORTANTE: sortedMessages já está ordenado por timestamp crescente (antigas primeiro)
     return (
       <Box 
         className={classes.messageList} 
-        display="flex" 
-        flexDirection="column" 
         style={{
-          gap: 16,
-          // Garante que as mensagens aparecem em ordem normal (não invertida)
-          flexDirection: "column",
+          backgroundColor: darkMode ? "#0a1014" : "#efeae2",
+          backgroundImage: darkMode ? WHATSAPP_DARK_BG : WHATSAPP_LIGHT_BG,
+          backgroundRepeat: "repeat",
+          backgroundSize: "400px",
+          backgroundAttachment: "fixed"
         }}
       >
         {sortedMessages.map((message, index) => {
-          // Determina se é mensagem do operador de forma mais robusta
           let isOutbound = false;
           
-          // Verifica primeiro pelo campo direction
           if (message.direction === "OUTBOUND") {
             isOutbound = true;
           } else if (message.direction === "INBOUND") {
             isOutbound = false;
           } else {
-            // Se não tem direction ou está indefinido, tenta inferir
-            // Mensagem com ID temporário é sempre do operador
             if (message.id?.startsWith("temp-")) {
               isOutbound = true;
             } 
-            // Se tem operatorId na mensagem, é do operador
             else if (message.operatorId) {
               isOutbound = true;
             }
-            // Se tem status SENT ou READ e não tem direction, provavelmente é do operador
             else if (message.status === "SENT" || message.status === "READ") {
               isOutbound = true;
             }
-            // Se não conseguir determinar, assume que é do cliente
             else {
               isOutbound = false;
             }
-            
-            console.warn("⚠️ Mensagem sem direction definida, inferindo:", {
-              id: message.id,
-              wamid: message.wamid,
-              inferredOutbound: isOutbound,
-              text: message.content?.text?.substring(0, 30)
-            });
           }
           
           const messageKey = message.id || message.wamid || `msg-${index}-${message.timestamp}`;
-          const senderLabel = isOutbound ? "OPERADOR" : "CLIENTE";
           
           return (
             <Box
               key={messageKey}
-              display="flex"
-              flexDirection="column"
-              style={{
-                marginBottom: 16,
-                alignItems: isOutbound ? "flex-end" : "flex-start",
-              }}
+              className={`${classes.messageRow} ${isOutbound ? 'outbound' : 'inbound'}`}
             >
-              {/* LABEL "OPERADOR" ou "CLIENTE" acima da mensagem */}
-              <Typography
-                variant="caption"
-                style={{
-                  fontWeight: 600,
-                  color: isOutbound ? "#1976d2" : "#388e3c",
-                  marginBottom: 4,
-                  fontSize: "0.75rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                }}
-              >
-                {senderLabel}
-              </Typography>
-              
-              {/* CONTEÚDO DA MENSAGEM */}
               <Box
-                className={[
-                  classes.messageItem,
-                  isOutbound ? classes.outboundMessage : classes.inboundMessage,
-                ].join(" ")}
+                className={`${classes.messageBubble} ${isOutbound ? 'outbound' : 'inbound'}`}
                 style={{
-                  maxWidth: "70%",
-                  borderRadius: 8,
-                  padding: "12px 16px",
-                  backgroundColor: isOutbound ? "#e3f2fd" : "#f1f8e9",
-                  border: `1px solid ${isOutbound ? "#90caf9" : "#aed581"}`,
+                  backgroundColor: isOutbound 
+                    ? (darkMode ? "#005c4b" : "#d9fdd3")
+                    : (darkMode ? "#202c33" : "#ffffff")
                 }}
               >
                 <Typography 
-                  variant="body1" 
-                  style={{ 
-                    marginBottom: 8,
-                    color: isOutbound ? "#000000" : undefined, // Texto preto para mensagens do operador
+                  className={classes.messageText}
+                  style={{
+                    color: darkMode ? "#e9edef" : "#111b21"
                   }}
                 >
                   {message.type === "text"
                     ? message.content?.text || "[Mensagem sem conteúdo]"
                     : `[${message.type}]`}
                 </Typography>
-                <Box 
-                  className={classes.metaRow}
-                  display="flex"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  style={{
-                    marginTop: 8,
-                    fontSize: "0.75rem",
-                    color: "#666",
-                  }}
-                >
-                  <Box display="flex" alignItems="center" gridGap={8}>
-                    <Chip
-                      size="small"
-                      label={isOutbound ? "Enviada" : "Recebida"}
-                      color={isOutbound ? "secondary" : "default"}
-                      style={{ height: 20, fontSize: "0.65rem" }}
-                    />
-                    {message.status && (
-                      <Typography variant="caption">
-                        {message.status === "PENDING" ? "Enviando..." : message.status}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Typography variant="caption">
-                    {formatDateTime(message.timestamp)}
+                <Box display="flex" alignItems="center" justifyContent="flex-end" marginTop="4px">
+                  <Typography 
+                    className={classes.messageTime}
+                    style={{
+                      color: darkMode ? "#8696a0" : "#667781"
+                    }}
+                  >
+                    {formatMessageTime(message.timestamp)}
                   </Typography>
+                  {isOutbound && renderMessageStatus(message.status)}
                 </Box>
               </Box>
             </Box>
@@ -1560,204 +1500,473 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     );
   };
 
-  const renderComposer = () => {
-    if (!conversation || conversation.status !== "OPEN") {
-      return null;
-    }
-
+  if (!conversation) {
     return (
-      <Box className={classes.formContainer}>
-        <Box className={classes.stackColumn}>
+      <Box className={classes.root}>
+        {renderMessages()}
+      </Box>
+    );
+  }
+
+  return (
+    <Box className={classes.root}>
+      <Box className={classes.mainContainer}>
+        {/* Área do chat */}
+        <Box className={classes.chatArea}>
+          {/* Header do chat */}
+          <Box className={classes.chatHeader} style={{
+            backgroundColor: darkMode ? "#202c33" : "#f0f2f5"
+          }}>
+            <Avatar className={classes.headerAvatar}>
+              {getInitials(conversation.customerName || conversation.customerPhone)}
+            </Avatar>
+            <Box className={classes.headerInfo}>
+              <Typography className={classes.headerName} style={{
+                color: darkMode ? "#e9edef" : "#111b21"
+              }}>
+                {conversation.customerName || conversation.customerPhone}
+              </Typography>
+              <Typography className={classes.headerStatus} style={{
+                color: darkMode ? "#8696a0" : "#667781"
+              }}>
+                {conversation.customerPhone}
+                {conversation.operator && ` • Atendido por ${conversation.operator.name}`}
+              </Typography>
+            </Box>
+            <Box className={classes.headerActions}>
+              <IconButton className={classes.headerIconButton} style={{
+                color: darkMode ? "#aebac1" : "#54656f"
+              }}>
+                <SearchIcon />
+              </IconButton>
+              <IconButton 
+                className={classes.headerIconButton}
+                onClick={fetchConversation}
+                style={{
+                  color: darkMode ? "#aebac1" : "#54656f"
+                }}
+              >
+                <RefreshIcon />
+              </IconButton>
+              <IconButton className={classes.headerIconButton} style={{
+                color: darkMode ? "#aebac1" : "#54656f"
+              }}>
+                <MoreVertIcon />
+              </IconButton>
+            </Box>
+          </Box>
+
+          {/* Área de mensagens */}
+          {renderMessages()}
+
+          {/* Banner de bloqueio */}
           {!canSendMessage && blockedMessage && (
-            <Box
-              style={{
-                padding: "12px",
-                backgroundColor: "#fff3cd",
-                borderRadius: 8,
-                border: "1px solid #ffecb5",
-              }}
-            >
-              <Typography variant="body2" style={{ color: "#664d03" }}>
+            <Box className={classes.warningBanner} style={{
+              backgroundColor: darkMode ? "#3a2f1a" : "#fff5e6",
+              border: darkMode ? "1px solid #665a3d" : "1px solid #ffd79c"
+            }}>
+              <Typography className={classes.warningText} style={{
+                color: darkMode ? "#ffcb77" : "#8b6914"
+              }}>
                 {blockedMessage}
               </Typography>
             </Box>
           )}
-          <Typography className={classes.sectionTitle}>
-            Enviar nova mensagem
-          </Typography>
-          <TextField
-            multiline
-            minRows={3}
-            variant="outlined"
-            placeholder="Escreva uma mensagem para o cliente..."
-            value={messageText}
-            onChange={(event) => setMessageText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && event.ctrlKey && !sending && messageText.trim()) {
-                event.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            disabled={sending || !canSendMessage}
-          />
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="caption" color="textSecondary">
-              Ctrl+Enter para enviar
-            </Typography>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<SendIcon />}
-              onClick={handleSendMessage}
-              disabled={sending || !messageText.trim() || !canSendMessage}
-            >
-              Enviar
-            </Button>
-          </Box>
-        </Box>
-      </Box>
-    );
-  };
 
-  const renderCloseForm = () => {
-    if (!conversation || conversation.status !== "OPEN") {
-      return null;
-    }
-
-    return (
-      <Box className={classes.formContainer}>
-        <Box className={classes.stackColumn}>
-          <Typography className={classes.sectionTitle}>
-            Encerrar conversa
-          </Typography>
-          <TextField
-            select
-            label="Tabulação"
-            SelectProps={{ native: true }}
-            value={selectedTabulation}
-            onChange={(event) => setSelectedTabulation(event.target.value)}
-            variant="outlined"
-            helperText="Selecione a tabulação correspondente ao desfecho da conversa."
-          >
-            <option value="">Selecione uma tabulação</option>
-            {tabulations.map((tabulation) => (
-              <option key={tabulation.id} value={tabulation.id}>
-                {tabulation.name}
-              </option>
-            ))}
-          </TextField>
-          <TextField
-            multiline
-            minRows={2}
-            label="Notas (opcional)"
-            variant="outlined"
-            value={closeNotes}
-            onChange={(event) => setCloseNotes(event.target.value)}
-            placeholder="Adicione observações importantes sobre o atendimento."
-          />
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Button
-              variant={hasCpc ? "contained" : "outlined"}
-              color="secondary"
-              onClick={handleToggleCpc}
-              disabled={cpcLoading}
-            >
-              {cpcLoading
-                ? "Atualizando..."
-                : hasCpc
-                ? "Remover CPC"
-                : "Marcar como CPC"}
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<CloseIcon />}
-              onClick={handleCloseConversation}
-              disabled={closing}
-            >
-              Encerrar atendimento
-            </Button>
-          </Box>
-        </Box>
-      </Box>
-    );
-  };
-
-  return (
-    <Box className={classes.root}>
-      <Box className={classes.header}>
-        <Box className={classes.headerRow}>
-          <Box>
-            <Typography variant="h4" component="h1">
-              Detalhes da Conversa
-            </Typography>
-            <Typography color="textSecondary">
-              Integração com vend.covenos.com.br · Microserviço oficial do
-              WhatsApp Business
-            </Typography>
-          </Box>
-          <Box className={classes.presenceWrapper}>
-            <Box className={classes.presenceControls}>
-              <Chip
-                className={classes.presenceChip}
-                color={isOnline ? "primary" : "default"}
-                label={isOnline ? "Online" : "Offline"}
-              />
-              {presenceInfo?.expiresAt && (
-                <Typography variant="caption" color="textSecondary">
-                  Sessão expira em {formatDateTime(presenceInfo.expiresAt)}
-                </Typography>
-              )}
-              {cpcMarkedAt && (
-                <Typography variant="caption" color="textSecondary">
-                  CPC registrado em {formatDateTime(cpcMarkedAt)}
-                </Typography>
-              )}
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={fetchConversation}
-                disabled={loading}
+          {/* Barra de input */}
+          {conversation.status === "OPEN" && (
+            <Box className={classes.inputBar} style={{
+              backgroundColor: darkMode ? "#202c33" : "#f0f2f5",
+              borderTop: darkMode ? "1px solid #2a3942" : "1px solid #e9edef"
+            }}>
+              <IconButton className={classes.inputIconButton} style={{
+                color: darkMode ? "#8696a0" : "#54656f"
+              }}>
+                <InsertEmoticonIcon />
+              </IconButton>
+              <IconButton className={classes.inputIconButton} style={{
+                color: darkMode ? "#8696a0" : "#54656f"
+              }}>
+                <AttachFileIcon />
+              </IconButton>
+              <Box className={classes.inputContainer} style={{
+                backgroundColor: darkMode ? "#2a3942" : "#ffffff"
+              }}>
+                <textarea
+                  ref={messageInputRef}
+                  className={classes.messageInput}
+                  placeholder="Digite uma mensagem"
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={sending || !canSendMessage}
+                  rows="1"
+                  style={{
+                    color: darkMode ? "#e9edef" : "#3b4a54"
+                  }}
+                />
+              </Box>
+              <IconButton 
+                className={classes.sendButton}
+                onClick={handleSendMessage}
+                disabled={sending || !messageText.trim() || !canSendMessage}
+                style={{
+                  backgroundColor: darkMode ? "#005c4b" : "#00a884"
+                }}
               >
-                Recarregar
-              </Button>
-              <Button
-                variant={isOnline ? "outlined" : "contained"}
-                color={isOnline ? "secondary" : "primary"}
-                onClick={isOnline ? handleGoOffline : handleGoOnline}
-                disabled={presenceLoading}
-              >
-                {presenceLoading
-                  ? "Atualizando..."
-                  : isOnline
-                  ? "Ficar offline"
-                  : "Ficar online"}
-              </Button>
+                {messageText.trim() ? <SendIcon /> : <MicIcon />}
+              </IconButton>
             </Box>
-          </Box>
+          )}
         </Box>
 
-        {error && (
-          <Box className={classes.errorBanner}>
-            <Typography variant="subtitle2">Erro</Typography>
-            <Typography variant="body2">{error}</Typography>
+        {/* Painel direito - Informações */}
+        <Box className={classes.infoPanel} style={{
+          backgroundColor: darkMode ? "#1a2329" : "#f0f2f5",
+          borderLeft: darkMode ? "1px solid #3b4a54" : "1px solid #e9edef"
+        }}>
+          <Box className={classes.infoPanelHeader} style={{
+            backgroundColor: darkMode ? "#232d36" : "#ffffff",
+            borderBottom: darkMode ? "1px solid #3b4a54" : "1px solid #e9edef"
+          }}>
+            <Avatar className={classes.infoPanelAvatar}>
+              {getInitials(conversation.customerName || conversation.customerPhone)}
+            </Avatar>
+            <Typography variant="h6" style={{ 
+              color: darkMode ? "#e9edef" : "#111b21",
+              fontWeight: 600
+            }}>
+              {conversation.customerName || "Cliente"}
+            </Typography>
+            <Typography variant="body2" style={{ color: darkMode ? "#aebac1" : "#667781" }}>
+              {conversation.customerPhone}
+            </Typography>
           </Box>
-        )}
+
+          <Box style={{ padding: 20 }}>
+            {/* Status Online/Offline */}
+            <Box marginBottom={3}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" marginBottom={2}>
+                <Chip
+                  className={classes.presenceChip}
+                  label={isOnline ? "🟢 Online" : "⚫ Offline"}
+                  size="small"
+                  style={{
+                    backgroundColor: isOnline 
+                      ? (darkMode ? "#00d9a6" : "#00a884") 
+                      : (darkMode ? "#3b4a54" : "#667781"),
+                    color: isOnline 
+                      ? (darkMode ? "#111b21" : "#ffffff")
+                      : "#ffffff",
+                    fontWeight: 600,
+                    padding: "4px 8px"
+                  }}
+                />
+                <Button
+                  variant={isOnline ? "outlined" : "contained"}
+                  size="small"
+                  onClick={isOnline ? handleGoOffline : handleGoOnline}
+                  disabled={presenceLoading}
+                  style={{
+                    borderColor: isOnline ? (darkMode ? "#ff6b6b" : "#d32f2f") : (darkMode ? "#00d9a6" : "#00a884"),
+                    borderWidth: 2,
+                    color: isOnline 
+                      ? (darkMode ? "#ff6b6b" : "#d32f2f") 
+                      : (darkMode ? "#111b21" : "#ffffff"),
+                    backgroundColor: isOnline
+                      ? "transparent"
+                      : (darkMode ? "#00d9a6" : "#00a884"),
+                    boxShadow: isOnline
+                      ? "none"
+                      : (darkMode ? "0 2px 8px rgba(0, 217, 166, 0.35)" : "0 2px 8px rgba(0, 168, 132, 0.35)"),
+                    fontWeight: 600
+                  }}
+                >
+                  {presenceLoading
+                    ? "Aguarde..."
+                    : isOnline
+                    ? "Ficar Offline"
+                    : "Ficar Online"}
+                </Button>
+              </Box>
+            </Box>
+
+            <Divider style={{ backgroundColor: darkMode ? "#3b4a54" : "#e9edef", marginBottom: 20 }} />
+
+            {/* Informações do cliente */}
+            <Box className={classes.infoPanelSection} style={{
+              backgroundColor: darkMode ? "#232d36" : "#ffffff",
+              border: darkMode ? "1px solid #3b4a54" : "none"
+            }}>
+              <Typography className={classes.sectionTitle} style={{
+                color: darkMode ? "#00d9a6" : "#00a884"
+              }}>
+                Dados do Cliente
+              </Typography>
+              <form onSubmit={handleSaveCustomerProfile}>
+                <Box marginBottom={2}>
+                  <Typography className={classes.fieldLabel} style={{
+                    color: darkMode ? "#e9edef" : "#111b21"
+                  }}>
+                    Nome
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    variant="outlined"
+                    value={customerForm.name}
+                    onChange={handleCustomerFieldChange("name")}
+                    disabled={isSavingCustomerProfile}
+                    placeholder="Digite o nome do cliente"
+                    InputProps={{
+                      style: {
+                        backgroundColor: darkMode ? "#1a2329" : "#ffffff",
+                        color: darkMode ? "#e9edef" : "#111b21",
+                      }
+                    }}
+                    className={classes.formField}
+                  />
+                </Box>
+                <Box marginBottom={2}>
+                  <Typography className={classes.fieldLabel} style={{
+                    color: darkMode ? "#e9edef" : "#111b21"
+                  }}>
+                    Contrato
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    variant="outlined"
+                    value={customerForm.contract}
+                    onChange={handleCustomerFieldChange("contract")}
+                    disabled={isSavingCustomerProfile}
+                    placeholder="Digite o número do contrato"
+                    InputProps={{
+                      style: {
+                        backgroundColor: darkMode ? "#1a2329" : "#ffffff",
+                        color: darkMode ? "#e9edef" : "#111b21",
+                      }
+                    }}
+                    className={classes.formField}
+                  />
+                </Box>
+                <Box marginBottom={2}>
+                  <Typography className={classes.fieldLabel} style={{
+                    color: darkMode ? "#e9edef" : "#111b21"
+                  }}>
+                    CPF
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    variant="outlined"
+                    value={customerForm.cpf}
+                    onChange={handleCustomerFieldChange("cpf")}
+                    disabled={isSavingCustomerProfile}
+                    placeholder="Digite o CPF (somente números)"
+                    helperText="Somente números"
+                    InputProps={{
+                      style: {
+                        backgroundColor: darkMode ? "#1a2329" : "#ffffff",
+                        color: darkMode ? "#e9edef" : "#111b21",
+                      }
+                    }}
+                    FormHelperTextProps={{
+                      style: {
+                        color: darkMode ? "#8696a0" : "#667781",
+                      }
+                    }}
+                    className={classes.formField}
+                  />
+                </Box>
+                <Box display="flex" justifyContent="flex-end" marginTop={2}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={!canSaveCustomerProfile}
+                    size="small"
+                    style={{
+                      backgroundColor: darkMode ? "#00d9a6" : "#00a884",
+                      color: darkMode ? "#111b21" : "#ffffff",
+                      fontWeight: 600,
+                      boxShadow: darkMode ? "0 2px 8px rgba(0, 217, 166, 0.35)" : "0 2px 8px rgba(0, 168, 132, 0.35)",
+                      "&:hover": {
+                        backgroundColor: darkMode ? "#00c494" : "#008f6f"
+                      }
+                    }}
+                  >
+                    {isSavingCustomerProfile ? "Salvando..." : "Salvar"}
+                  </Button>
+                </Box>
+              </form>
+            </Box>
+
+            {/* CPC */}
+            <Box className={classes.infoPanelSection} style={{
+              backgroundColor: darkMode ? "#232d36" : "#ffffff",
+              border: darkMode ? "1px solid #3b4a54" : "none"
+            }}>
+              <Typography className={classes.sectionTitle} style={{
+                color: darkMode ? "#00d9a6" : "#00a884"
+              }}>
+                Status CPC
+              </Typography>
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography variant="body2" style={{ 
+                  color: darkMode ? "#e9edef" : "#111b21",
+                  fontWeight: 500
+                }}>
+                  {hasCpc ? "Marcado como CPC" : "Não é CPC"}
+                </Typography>
+                <Button
+                  variant={hasCpc ? "contained" : "outlined"}
+                  size="small"
+                  onClick={handleToggleCpc}
+                  disabled={cpcLoading}
+                  style={{
+                    backgroundColor: hasCpc ? "#d32f2f" : "transparent",
+                    borderColor: darkMode ? "#00d9a6" : "#00a884",
+                    borderWidth: 2,
+                    color: hasCpc ? "#ffffff" : (darkMode ? "#00d9a6" : "#00a884"),
+                    fontWeight: 600
+                  }}
+                >
+                  {cpcLoading
+                    ? "Aguarde..."
+                    : hasCpc
+                    ? "Remover CPC"
+                    : "Marcar como CPC"}
+                </Button>
+              </Box>
+            </Box>
+
+            {/* Encerramento */}
+            {conversation.status === "OPEN" && (
+              <Box className={classes.infoPanelSection} style={{
+                backgroundColor: darkMode ? "#232d36" : "#ffffff",
+                border: darkMode ? "1px solid #3b4a54" : "none"
+              }}>
+                <Typography className={classes.sectionTitle} style={{
+                  color: darkMode ? "#00d9a6" : "#00a884"
+                }}>
+                  Encerrar Conversa
+                </Typography>
+                <Box marginBottom={2}>
+                  <Typography className={classes.fieldLabel} style={{
+                    color: darkMode ? "#e9edef" : "#111b21"
+                  }}>
+                    Tabulação
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    select
+                    SelectProps={{
+                      MenuProps: {
+                        getContentAnchorEl: null,
+                        anchorOrigin: {
+                          vertical: "bottom",
+                          horizontal: "left",
+                        },
+                        PaperProps: {
+                          style: {
+                            backgroundColor: darkMode ? "#232d36" : "#ffffff",
+                            color: darkMode ? "#e9edef" : "#111b21",
+                            border: darkMode ? "1px solid #3b4a54" : "none",
+                          },
+                        },
+                      },
+                      style: {
+                        color: darkMode ? "#e9edef" : "#111b21",
+                        backgroundColor: darkMode ? "#1a2329" : "#ffffff",
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                      },
+                    }}
+                    InputProps={{
+                      style: {
+                        backgroundColor: darkMode ? "#1a2329" : "#ffffff",
+                        color: darkMode ? "#e9edef" : "#111b21",
+                      },
+                    }}
+                    value={selectedTabulation}
+                    onChange={(event) => setSelectedTabulation(event.target.value)}
+                    variant="outlined"
+                    size="small"
+                    placeholder="Selecione uma opção"
+                    className={classes.formField}
+                  >
+                    <MenuItem
+                      value=""
+                      style={{
+                        backgroundColor: darkMode ? "#232d36" : "#ffffff",
+                        color: darkMode ? "#8696a0" : "#667781",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Selecione uma tabulação
+                    </MenuItem>
+                    {tabulations.map((tabulation) => (
+                      <MenuItem
+                        key={tabulation.id}
+                        value={tabulation.id}
+                        style={{
+                          backgroundColor: darkMode ? "#232d36" : "#ffffff",
+                          color: darkMode ? "#e9edef" : "#111b21",
+                          "&:hover": {
+                            backgroundColor: darkMode ? "#1a2329" : "#f0f2f5",
+                          }
+                        }}
+                      >
+                        {tabulation.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+                <Box marginBottom={2}>
+                  <Typography className={classes.fieldLabel} style={{
+                    color: darkMode ? "#e9edef" : "#111b21"
+                  }}>
+                    Observações
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={3}
+                    variant="outlined"
+                    value={closeNotes}
+                    onChange={(event) => setCloseNotes(event.target.value)}
+                    placeholder="Adicione observações sobre o atendimento..."
+                    InputProps={{
+                      style: {
+                        backgroundColor: darkMode ? "#1a2329" : "#ffffff",
+                        color: darkMode ? "#e9edef" : "#111b21",
+                      }
+                    }}
+                    className={classes.formField}
+                  />
+                </Box>
+                <Box display="flex" justifyContent="flex-end" marginTop={2}>
+                  <Button
+                    variant="contained"
+                    startIcon={<CloseIcon />}
+                    onClick={handleCloseConversation}
+                    disabled={closing || !selectedTabulation}
+                    size="small"
+                    style={{
+                      backgroundColor: darkMode ? "#ff6b6b" : "#d32f2f",
+                      color: "#ffffff",
+                      fontWeight: 600,
+                      boxShadow: "0 2px 8px rgba(211, 47, 47, 0.35)"
+                    }}
+                  >
+                    {closing ? "Encerrando..." : "Encerrar"}
+                  </Button>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </Box>
       </Box>
-
-      {renderHeader()}
-
-      <Grid container spacing={3} className={classes.chatGrid}>
-        <Grid item xs={12} md={8} className={classes.chatPane}>
-          {renderMessages()}
-        </Grid>
-        <Grid item xs={12} md={4} className={classes.sidePane}>
-          <Box display="flex" flexDirection="column" gridGap={24}>
-            {renderComposer()}
-            {renderCloseForm()}
-          </Box>
-        </Grid>
-      </Grid>
     </Box>
   );
 };
