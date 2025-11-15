@@ -395,7 +395,7 @@ export class CampaignsService {
     return str.length ? str : null;
   }
 
-  private normalizeCpf(value: string): string | null {
+  private normalizeCpf(value?: string | null): string | null {
     if (!value) {
       return null;
     }
@@ -408,7 +408,10 @@ export class CampaignsService {
     return digits;
   }
 
-  private normalizePhoneNumber(phone: string): string {
+  private normalizePhoneNumber(phone?: string | null): string | null {
+    if (!phone) {
+      return null;
+    }
     // Remove all non-digit characters
     let cleaned = phone.replace(/\D/g, '');
 
