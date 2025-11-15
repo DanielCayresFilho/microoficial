@@ -40,17 +40,23 @@ import { SocketContext } from "../../context/Socket/SocketContext";
 
 const useStyles = makeStyles((theme) => ({
   root: {
-    padding: theme.spacing(4),
     minHeight: "100vh",
-    backgroundColor: theme.palette.background.default,
+    padding: theme.spacing(2),
+    background: "linear-gradient(180deg, #0b141a 0%, #111b21 45%, #202c33 100%)",
+    color: "#d1d7db",
     display: "flex",
     flexDirection: "column",
-    gap: theme.spacing(3),
+    gap: theme.spacing(2),
   },
   header: {
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(2),
+    backgroundColor: "#202c33",
+    borderRadius: 16,
+    padding: theme.spacing(2),
+    border: "1px solid #2a3942",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
   },
   headerRow: {
     display: "flex",
@@ -60,51 +66,67 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(2),
   },
   infoCard: {
-    borderRadius: theme.spacing(2),
-    boxShadow: theme.shadows[1],
+    borderRadius: 20,
+    backgroundColor: "#202c33",
+    border: "1px solid #2a3942",
+    color: "#e9edef",
+    boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
   },
   sectionTitle: {
     fontWeight: 600,
     marginBottom: theme.spacing(1),
+    color: "#8696a0",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    fontSize: "0.85rem",
   },
   messageList: {
-    maxHeight: "60vh",
+    maxHeight: "calc(100vh - 420px)",
+    minHeight: "50vh",
     overflowY: "auto",
-    padding: theme.spacing(2),
-    borderRadius: theme.spacing(2),
-    border: `1px solid ${theme.palette.divider}`,
-    backgroundColor: theme.palette.background.paper,
+    padding: theme.spacing(3),
+    borderRadius: 18,
+    border: "1px solid #2a3942",
+    backgroundImage:
+      "url('https://www.transparenttextures.com/patterns/asfalt-dark.png'), linear-gradient(180deg,#0b141a,#111b21)",
+    backgroundColor: "#0b141a",
   },
   messageItem: {
     padding: theme.spacing(1.5),
-    borderRadius: theme.spacing(1.5),
-    maxWidth: "70%",
+    borderRadius: 12,
+    maxWidth: "68%",
     wordBreak: "break-word",
-    boxShadow: theme.shadows[1],
+    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(0.5),
   },
   inboundMessage: {
-    backgroundColor: theme.palette.grey[100],
+    backgroundColor: "#202c33",
+    color: "#e9edef",
     alignSelf: "flex-start",
+    borderTopLeftRadius: 0,
   },
   outboundMessage: {
-    backgroundColor: theme.palette.primary.light,
-    color: theme.palette.primary.contrastText,
+    backgroundColor: "#005c4b",
+    color: "#fff",
     alignSelf: "flex-end",
+    borderTopRightRadius: 0,
   },
   metaRow: {
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(1),
     flexWrap: "wrap",
+    color: "#8696a0",
+    fontSize: "0.75rem",
   },
   messageFooter: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing(2),
+    color: "#aebac1",
   },
   presenceWrapper: {
     display: "flex",
@@ -121,23 +143,27 @@ const useStyles = makeStyles((theme) => ({
   },
   presenceChip: {
     fontWeight: 600,
+    backgroundColor: "#005c4b",
+    color: "#e9edef",
   },
   emptyState: {
     padding: theme.spacing(8, 2),
     textAlign: "center",
-    color: theme.palette.text.secondary,
+    color: "#8696a0",
   },
   formContainer: {
     padding: theme.spacing(2),
-    borderRadius: theme.spacing(2),
-    border: `1px solid ${theme.palette.divider}`,
-    backgroundColor: theme.palette.background.paper,
+    borderRadius: 16,
+    border: "1px solid #2a3942",
+    backgroundColor: "#202c33",
+    color: "#e9edef",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
   },
   errorBanner: {
     padding: theme.spacing(2),
     borderRadius: theme.spacing(1),
-    backgroundColor: theme.palette.error.light,
-    color: theme.palette.error.dark,
+    backgroundColor: "#3b4252",
+    color: "#fdd835",
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(2),
@@ -157,6 +183,15 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(1),
+  },
+  chatGrid: {
+    flex: 1,
+  },
+  chatPane: {
+    backgroundColor: "transparent",
+  },
+  sidePane: {
+    backgroundColor: "transparent",
   },
 }));
 
@@ -220,6 +255,19 @@ const formatDateTime = (value) => {
   }
 };
 
+const formatCpf = (value) => {
+  if (!value) {
+    return "N/A";
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length !== 11) {
+    return value;
+  }
+
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
 const useOptionalConversationId = () => {
   try {
     const params = useParams();
@@ -273,6 +321,13 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
   const [closeNotes, setCloseNotes] = useState("");
   const [selectedTabulation, setSelectedTabulation] = useState("");
   const [tabulations, setTabulations] = useState([]);
+  const [customerForm, setCustomerForm] = useState({
+    name: "",
+    contract: "",
+    cpf: "",
+  });
+  const [isSavingCustomerProfile, setIsSavingCustomerProfile] = useState(false);
+  const [customerFormDirty, setCustomerFormDirty] = useState(false);
   const heartbeatRef = useRef(null);
   const fetchTimeoutRef = useRef(null);
   const eligibilityTimeoutRef = useRef(null);
@@ -354,6 +409,8 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
   const isBlockedByTime = Boolean(eligibility?.isBlockedByTime);
   const lastMessageFromCustomer = Boolean(eligibility?.lastMessageFromCustomer);
   const hasCpc = Boolean(cpcMarkedAt);
+  const canSaveCustomerProfile =
+    Boolean(conversationId) && customerFormDirty && !isSavingCustomerProfile;
 
   const getBlockedMessage = useCallback(() => {
     if (!eligibility || canSendMessage) {
@@ -543,6 +600,34 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
     fetchTabulations();
   }, [fetchTabulations]);
 
+  useEffect(() => {
+    if (!conversation) {
+      setCustomerForm({
+        name: "",
+        contract: "",
+        cpf: "",
+      });
+      setCustomerFormDirty(false);
+      return;
+    }
+
+    setCustomerForm({
+      name:
+        conversation.customerProfile?.name ??
+        conversation.customerName ??
+        "",
+      contract:
+        conversation.customerProfile?.contract ??
+        conversation.customerContract ??
+        "",
+      cpf:
+        conversation.customerProfile?.cpf ??
+        conversation.customerCpf ??
+        "",
+    });
+    setCustomerFormDirty(false);
+  }, [conversation?.id, conversation?.customerProfile, conversation]);
+
   // Memoiza mensagens ordenadas - Ordena por timestamp crescente (mais antigas primeiro)
   const sortedMessages = useMemo(() => {
     if (!conversation?.messages || !Array.isArray(conversation.messages)) {
@@ -566,6 +651,49 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
       return timeA - timeB;
     });
   }, [conversation?.messages]);
+
+  const handleCustomerFieldChange = (field) => (event) => {
+    const value = event?.target?.value ?? "";
+    setCustomerForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+    setCustomerFormDirty(true);
+  };
+
+  const handleSaveCustomerProfile = async (event) => {
+    if (event) {
+      event.preventDefault();
+    }
+
+    if (!conversationId) {
+      return;
+    }
+
+    setIsSavingCustomerProfile(true);
+    try {
+      const payload = {
+        name: customerForm.name?.trim() || undefined,
+        contract: customerForm.contract?.trim() || undefined,
+        cpf: customerForm.cpf?.trim() || undefined,
+      };
+      const updated = await whatsappMicroservice.updateConversationCustomerProfile(
+        conversationId,
+        payload
+      );
+      setConversation(updated);
+      toast.success("Dados do cliente atualizados.");
+      setCustomerFormDirty(false);
+    } catch (err) {
+      const message =
+        err?.message ||
+        err?.error ||
+        "Não foi possível salvar os dados do cliente.";
+      toast.error(message);
+    } finally {
+      setIsSavingCustomerProfile(false);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !conversationId) {
@@ -1141,7 +1269,7 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
             <Divider />
 
             <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
                 <Typography className={classes.sectionTitle}>
                   Dados do número
                 </Typography>
@@ -1157,7 +1285,7 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
                 <Typography className={classes.sectionTitle}>
                   Operador responsável
                 </Typography>
@@ -1181,7 +1309,7 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
                   )}
                 </Box>
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
                 <Typography className={classes.sectionTitle}>
                   Tabulação & Notas
                 </Typography>
@@ -1200,6 +1328,57 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
                     </Paper>
                   )}
                 </Box>
+              </Grid>
+              <Grid item xs={12} md={conversation.customerProfile ? 3 : 4}>
+                <Typography className={classes.sectionTitle}>
+                  Dados do cliente
+                </Typography>
+                <form className={classes.stackColumnSmall} onSubmit={handleSaveCustomerProfile}>
+                  <TextField
+                    label="Nome"
+                    size="small"
+                    variant="outlined"
+                    value={customerForm.name}
+                    onChange={handleCustomerFieldChange("name")}
+                    disabled={isSavingCustomerProfile}
+                  />
+                  <TextField
+                    label="Contrato"
+                    size="small"
+                    variant="outlined"
+                    value={customerForm.contract}
+                    onChange={handleCustomerFieldChange("contract")}
+                    disabled={isSavingCustomerProfile}
+                  />
+                  <TextField
+                    label="CPF"
+                    size="small"
+                    variant="outlined"
+                    value={customerForm.cpf}
+                    onChange={handleCustomerFieldChange("cpf")}
+                    disabled={isSavingCustomerProfile}
+                    helperText="Somente números"
+                  />
+                  <Box className={classes.stackRow} justifyContent="space-between">
+                    <Typography variant="caption" color="textSecondary">
+                      Origem:{" "}
+                      {conversation.customerProfile?.source === "CAMPAIGN"
+                        ? "Campanha"
+                        : customerFormDirty
+                        ? "Edição em andamento"
+                        : "Manual"}
+                    </Typography>
+                    <Button
+                      type="submit"
+                      color="primary"
+                      variant="contained"
+                      disabled={!canSaveCustomerProfile}
+                      size="small"
+                    >
+                      {isSavingCustomerProfile ? "Salvando..." : "Salvar"}
+                    </Button>
+                  </Box>
+                </form>
               </Grid>
             </Grid>
           </Box>
@@ -1568,11 +1747,11 @@ const Tickets = ({ conversationId: conversationIdProp }) => {
 
       {renderHeader()}
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
+      <Grid container spacing={3} className={classes.chatGrid}>
+        <Grid item xs={12} md={8} className={classes.chatPane}>
           {renderMessages()}
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={4} className={classes.sidePane}>
           <Box display="flex" flexDirection="column" gridGap={24}>
             {renderComposer()}
             {renderCloseForm()}

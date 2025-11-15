@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { addHours, differenceInHours, isAfter } from 'date-fns';
 import {
+  CampaignContact,
   ConversationEventDirection,
   ConversationEventSource,
   ConversationEventType,
@@ -12,6 +13,12 @@ import { EventsGateway } from '../events/events.gateway';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CloseConversationDto } from './dto/close-conversation.dto';
 import { SetCpcStatusDto } from './dto/set-cpc-status.dto';
+import { UpdateCustomerProfileDto } from './dto/update-customer-profile.dto';
+
+type CustomerProfileRecord = Pick<
+  CampaignContact,
+  'phoneNumber' | 'customerName' | 'contractCode' | 'customerCpf' | 'rawPayload' | 'updatedAt'
+>;
 
 @Injectable()
 export class ConversationsService {
@@ -81,6 +88,85 @@ export class ConversationsService {
     };
   }
 
+  private normalizeLookupPhone(phone?: string | null): string | null {
+    if (!phone) {
+      return null;
+    }
+    const digits = phone.replace(/\D/g, '');
+    return digits.length ? digits : null;
+  }
+
+  private async loadCustomerProfilesByPhones(
+    phones: string[],
+  ): Promise<Map<string, CustomerProfileRecord>> {
+    const normalizedPhones = Array.from(
+      new Set(
+        phones
+          .map((phone) => this.normalizeLookupPhone(phone))
+          .filter((value): value is string => !!value),
+      ),
+    );
+
+    if (normalizedPhones.length === 0) {
+      return new Map();
+    }
+
+    const contacts = await this.prisma.campaignContact.findMany({
+      where: { phoneNumber: { in: normalizedPhones } },
+      select: {
+        phoneNumber: true,
+        customerName: true,
+        contractCode: true,
+        customerCpf: true,
+        rawPayload: true,
+        updatedAt: true,
+      },
+    });
+
+    const map = new Map<string, CustomerProfileRecord>();
+    contacts.forEach((contact) => {
+      map.set(contact.phoneNumber, contact);
+    });
+
+    return map;
+  }
+
+  private serializeCustomerProfile(record?: CustomerProfileRecord | null) {
+    if (!record) {
+      return null;
+    }
+
+    return {
+      name: record.customerName,
+      contract: record.contractCode,
+      cpf: record.customerCpf,
+      lastUpdatedAt: record.updatedAt,
+      rawPayload: record.rawPayload,
+      source: 'CAMPAIGN' as const,
+    };
+  }
+
+  private buildCustomerProfile(conversation: Conversation, record?: CustomerProfileRecord | null) {
+    const campaignProfile = this.serializeCustomerProfile(record);
+    const hasManualData =
+      Boolean(conversation.customerName) ||
+      Boolean(conversation.customerContract) ||
+      Boolean(conversation.customerCpf);
+
+    if (!hasManualData) {
+      return campaignProfile;
+    }
+
+    return {
+      name: conversation.customerName ?? campaignProfile?.name ?? null,
+      contract: conversation.customerContract ?? campaignProfile?.contract ?? null,
+      cpf: conversation.customerCpf ?? campaignProfile?.cpf ?? null,
+      lastUpdatedAt: conversation.updatedAt,
+      rawPayload: campaignProfile?.rawPayload ?? null,
+      source: 'MANUAL' as const,
+    };
+  }
+
   private async registerEvent(data: {
     conversationId?: string;
     messageId?: string;
@@ -147,12 +233,21 @@ export class ConversationsService {
       orderBy: { lastMessageAt: 'desc' },
     });
 
+    const profileMap = await this.loadCustomerProfilesByPhones(
+      conversations.map((conversation) => conversation.customerPhone),
+    );
     const now = new Date();
 
-    return conversations.map((conversation) => ({
-      ...conversation,
-      eligibility: this.computeEligibility(conversation, now),
-    }));
+    return conversations.map((conversation) => {
+      const normalizedPhone = this.normalizeLookupPhone(conversation.customerPhone);
+      const profileRecord = normalizedPhone ? profileMap.get(normalizedPhone) ?? null : null;
+
+      return {
+        ...conversation,
+        customerProfile: this.buildCustomerProfile(conversation, profileRecord),
+        eligibility: this.computeEligibility(conversation, now),
+      };
+    });
   }
 
   async findConversationById(id: string) {
@@ -176,11 +271,59 @@ export class ConversationsService {
       throw new NotFoundException('Conversation not found');
     }
 
+    const profileMap = await this.loadCustomerProfilesByPhones([conversation.customerPhone]);
+    const normalizedPhone = this.normalizeLookupPhone(conversation.customerPhone);
     const now = new Date();
     return {
       ...conversation,
+      customerProfile: this.buildCustomerProfile(
+        conversation,
+        normalizedPhone ? profileMap.get(normalizedPhone) ?? null : null,
+      ),
       eligibility: this.computeEligibility(conversation, now),
     };
+  }
+
+  async updateCustomerProfile(
+    conversationId: string,
+    dto: UpdateCustomerProfileDto,
+  ) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    const data: any = {};
+
+    if (dto.name !== undefined) {
+      data.customerName = dto.name?.trim() ? dto.name.trim() : null;
+    }
+
+    if (dto.contract !== undefined) {
+      data.customerContract = dto.contract?.trim() ? dto.contract.trim() : null;
+    }
+
+    if (dto.cpf !== undefined) {
+      const digits = dto.cpf ? dto.cpf.replace(/\D/g, '') : '';
+      if (digits && digits.length !== 11) {
+        throw new BadRequestException('CPF inválido. Utilize 11 dígitos.');
+      }
+      data.customerCpf = digits || null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return this.findConversationById(conversationId);
+    }
+
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data,
+    });
+
+    return this.findConversationById(conversationId);
   }
 
   async sendMessage(conversationId: string, dto: SendMessageDto) {

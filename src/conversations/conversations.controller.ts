@@ -13,6 +13,7 @@ import { ConversationsService } from './conversations.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CloseConversationDto } from './dto/close-conversation.dto';
 import { SetCpcStatusDto } from './dto/set-cpc-status.dto';
+import { UpdateCustomerProfileDto } from './dto/update-customer-profile.dto';
 
 @Controller('conversations')
 export class ConversationsController {
@@ -71,5 +72,13 @@ export class ConversationsController {
     @Body('operatorId') operatorId: string,
   ) {
     return this.conversationsService.assignOperator(conversationId, operatorId);
+  }
+
+  @Put(':id/customer-profile')
+  updateCustomerProfile(
+    @Param('id') conversationId: string,
+    @Body() dto: UpdateCustomerProfileDto,
+  ) {
+    return this.conversationsService.updateCustomerProfile(conversationId, dto);
   }
 }

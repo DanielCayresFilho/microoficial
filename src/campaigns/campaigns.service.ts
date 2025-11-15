@@ -12,6 +12,12 @@ import * as path from 'path';
 @Injectable()
 export class CampaignsService {
   private readonly logger = new Logger(CampaignsService.name);
+  private readonly requiredCsvColumns = {
+    phone: ['telefone', 'phone', 'phoneNumber', 'phone_number', 'celular', 'whatsapp'],
+    name: ['nome', 'name'],
+    contract: ['contrato', 'contract', 'contract_id', 'contracto'],
+    cpf: ['cpf', 'documento', 'document', 'document_number'],
+  };
 
   constructor(
     private prisma: PrismaService,
@@ -227,9 +233,9 @@ export class CampaignsService {
 
             for (let index = 0; index < results.length; index += 1) {
               const row = results[index];
-              const phoneNumber = this.extractPhoneNumber(row);
-              if (!phoneNumber) {
-                this.logger.warn(`Skipping row ${index}: no phone number found`);
+              const parsedRow = this.parseCampaignCsvRow(row, index);
+
+              if (!parsedRow) {
                 continue;
               }
 
@@ -237,16 +243,22 @@ export class CampaignsService {
                 where: {
                   campaignId_phoneNumber: {
                     campaignId: campaign.id,
-                    phoneNumber,
+                    phoneNumber: parsedRow.phoneNumber,
                   },
                 },
                 update: {
                   rawPayload: row,
+                  customerName: parsedRow.name,
+                  contractCode: parsedRow.contract,
+                  customerCpf: parsedRow.cpf,
                   updatedAt: new Date(),
                 },
                 create: {
                   campaignId: campaign.id,
-                  phoneNumber,
+                  phoneNumber: parsedRow.phoneNumber,
+                  customerName: parsedRow.name,
+                  contractCode: parsedRow.contract,
+                  customerCpf: parsedRow.cpf,
                   rawPayload: row,
                 },
               });
@@ -261,7 +273,7 @@ export class CampaignsService {
                   numberId: campaign.number.id,
                   phoneNumberId: campaign.number.phoneNumberId,
                   accessToken: campaign.account.accessToken,
-                  to: phoneNumber,
+                  to: parsedRow.phoneNumber,
                   templateName: campaign.template.name,
                   languageCode: campaign.template.language,
                   components,
@@ -306,23 +318,94 @@ export class CampaignsService {
     });
   }
 
-  private extractPhoneNumber(row: any): string | null {
-    // Try common column names
-    const phoneFields = ['phone', 'phoneNumber', 'phone_number', 'telefone', 'celular', 'whatsapp'];
+  private parseCampaignCsvRow(row: Record<string, any>, index: number) {
+    if (!row || typeof row !== 'object') {
+      this.logger.warn(`Skipping row ${index}: invalid record`);
+      return null;
+    }
 
-    for (const field of phoneFields) {
-      if (row[field]) {
-        return this.normalizePhoneNumber(row[field]);
+    const normalizedRow = this.normalizeRowKeys(row);
+
+    const rawPhone = this.getValueFromRow(normalizedRow, this.requiredCsvColumns.phone);
+    const name = this.getValueFromRow(normalizedRow, this.requiredCsvColumns.name);
+    const contract = this.getValueFromRow(normalizedRow, this.requiredCsvColumns.contract);
+    const rawCpf = this.getValueFromRow(normalizedRow, this.requiredCsvColumns.cpf);
+
+    const missingFields: string[] = [];
+    if (!rawPhone) missingFields.push('telefone');
+    if (!name) missingFields.push('nome');
+    if (!contract) missingFields.push('contrato');
+    if (!rawCpf) missingFields.push('cpf');
+
+    if (missingFields.length > 0) {
+      this.logger.warn(
+        `Skipping row ${index}: missing required column(s) ${missingFields.join(', ')}`,
+      );
+      return null;
+    }
+
+    const phoneNumber = this.normalizePhoneNumber(rawPhone);
+    if (!phoneNumber) {
+      this.logger.warn(`Skipping row ${index}: telefone inválido (${rawPhone})`);
+      return null;
+    }
+
+    const cpf = this.normalizeCpf(rawCpf);
+    if (!cpf) {
+      this.logger.warn(`Skipping row ${index}: CPF inválido (${rawCpf})`);
+      return null;
+    }
+
+    return {
+      phoneNumber,
+      name,
+      contract,
+      cpf,
+    };
+  }
+
+  private normalizeRowKeys(row: Record<string, any>) {
+    return Object.entries(row).reduce<Record<string, any>>((acc, [key, value]) => {
+      if (typeof key === 'string') {
+        acc[key.trim().toLowerCase()] = value;
+      }
+      return acc;
+    }, {});
+  }
+
+  private getValueFromRow(
+    normalizedRow: Record<string, any>,
+    aliases: string[],
+  ): string | null {
+    for (const alias of aliases) {
+      const value = normalizedRow[alias.toLowerCase()];
+      const sanitized = this.toStringValue(value);
+      if (sanitized) {
+        return sanitized;
       }
     }
+    return null;
+  }
 
-    // If not found, try first column
-    const firstValue = Object.values(row)[0];
-    if (firstValue && typeof firstValue === 'string') {
-      return this.normalizePhoneNumber(firstValue);
+  private toStringValue(value: any): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    const str = String(value).trim();
+    return str.length ? str : null;
+  }
+
+  private normalizeCpf(value: string): string | null {
+    if (!value) {
+      return null;
     }
 
-    return null;
+    const digits = value.replace(/\D/g, '');
+    if (digits.length !== 11) {
+      return null;
+    }
+
+    return digits;
   }
 
   private normalizePhoneNumber(phone: string): string {

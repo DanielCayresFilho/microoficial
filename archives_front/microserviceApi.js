@@ -154,6 +154,8 @@ export const whatsappMicroservice = {
         operatorId,
       })
     ),
+  updateConversationCustomerProfile: (conversationId, payload) =>
+    unwrap(httpClient.put(`/conversations/${conversationId}/customer-profile`, payload)),
 
   getCampaigns: (params) => unwrap(httpClient.get("/campaigns", { params })),
   getCampaignById: (campaignId) =>

@@ -516,9 +516,9 @@ const Schedules = () => {
             </Grid>
             <Grid item xs={12} md={4}>
               <Typography variant="body2" color="textSecondary">
-                O arquivo deve conter uma coluna com o telefone do destinatário
-                (ex.: phone, telefone, celular). Outras colunas podem ser
-                usadas como variáveis do template.
+                Estrutura obrigatória do CSV: <strong>telefone, nome, contrato, CPF</strong>.
+                Eles devem ser enviados exatamente nessas colunas para que o sistema
+                associe o cliente e exiba os dados no atendimento.
               </Typography>
             </Grid>
           </Grid>

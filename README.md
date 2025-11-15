@@ -172,6 +172,8 @@ Acesse a página de **Conexões** para:
 1. Acesse a página de **Agendamento**
 2. Selecione ou crie uma campanha
 3. Faça upload do arquivo CSV
+   - O arquivo **deve conter exatamente** as colunas `telefone`, `nome`, `contrato`, `CPF`
+     (nessa ordem). Esses dados alimentam a tabela `campaign_contacts` e são exibidos aos operadores.
 4. Configure o template
 5. Inicie a campanha
 6. Acompanhe o progresso em tempo real
@@ -380,7 +382,7 @@ A autenticação é feita via:
 
 ### 📅 **Schedule (Campanhas)**
 - Criação de campanhas
-- Upload de CSV
+- Upload de CSV (colunas: telefone, nome, contrato, CPF)
 - Configuração de templates
 - Controle de campanhas
 
@@ -415,7 +417,7 @@ A autenticação é feita via:
 8. Atualiza UI
 
 ### **Campanha Enviada**
-1. Upload de CSV
+1. Upload de CSV (telefone, nome, contrato, CPF)
 2. Backend processa CSV
 3. Cria jobs no BullMQ
 4. Worker processa cada contato

@@ -865,12 +865,16 @@ Faz upload do arquivo CSV com destinatários e inicia a campanha.
 **Form Data:**
 - `file` (file, obrigatório) - Arquivo CSV
 
-**Formato do CSV:**
+**Formato do CSV (ordem obrigatória das colunas):**
 ```csv
-phone,name,product,price
-5511999999999,João Silva,Produto A,R$ 99,90
-5511888888888,Maria Santos,Produto B,R$ 149,90
+telefone,nome,contrato,cpf
+5511999999999,João Silva,123456,12345678901
+5511888888888,Maria Santos,987654,98765432109
 ```
+
+> As quatro colunas são utilizadas para preencher automaticamente o cadastro em `campaign_contacts`
+> (telefone normalizado, nome do cliente, número do contrato e CPF). Essas informações são exibidas
+> para os operadores no front-end durante o atendimento.
 
 **Exemplo:**
 ```bash

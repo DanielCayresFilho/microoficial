@@ -143,6 +143,8 @@ model Conversation {
   id              String    @id @default(uuid())
   customerPhone   String // Customer's phone number
   customerName    String?
+  customerContract String?
+  customerCpf     String?
   numberId        String // WhatsApp number handling this conversation
   operatorId      String? // Assigned operator
   status          String    @default("OPEN") // OPEN, CLOSED, PENDING_CLOSURE
@@ -210,6 +212,9 @@ model CampaignContact {
   id             String   @id @default(uuid())
   campaignId     String
   phoneNumber    String
+  customerName   String?
+  contractCode   String?
+  customerCpf    String?
   rawPayload     Json?
   status         String   @default("PENDING")
   lastAttemptAt  DateTime?
