@@ -6,7 +6,10 @@ import { makeStyles } from "@material-ui/core/styles"
 import Button from "@material-ui/core/Button"
 import TextField from "@material-ui/core/TextField"
 import MainContainer from "../../components/MainContainer"
-import api from "../../services/api"
+import {
+    whatsappMicroservice,
+    getActiveMicroserviceApiKey,
+  } from "../Connections/microserviceApi";
 import {
   Backdrop,
   Box,
@@ -247,14 +250,10 @@ const Relatories = () => {
   const handleGenerateOperatorsCSV = async () => {
     setLoading(true)
     try {
-      const response = await api.get("/reports/operators", {
-        params: {
-          dateFrom: dateFrom,
-          dateTo: dateTo,
-        }
+      const operatorsData = await whatsappMicroservice.getOperatorsReport({
+        dateFrom: dateFrom,
+        dateTo: dateTo,
       });
-
-      const operatorsData = response.data;
 
       if (!operatorsData || operatorsData.length === 0) {
         toast.info("Nenhum dado encontrado para o período selecionado");
@@ -310,14 +309,10 @@ const Relatories = () => {
   const handleGenerateConversationsCSV = async () => {
     setLoading(true)
     try {
-      const response = await api.get("/reports/conversations", {
-        params: {
-          dateFrom: dateFrom,
-          dateTo: dateTo,
-        }
+      const conversationsData = await whatsappMicroservice.getConversationsReport({
+        dateFrom: dateFrom,
+        dateTo: dateTo,
       });
-
-      const conversationsData = response.data;
 
       if (!conversationsData || conversationsData.length === 0) {
         toast.info("Nenhum dado encontrado para o período selecionado");

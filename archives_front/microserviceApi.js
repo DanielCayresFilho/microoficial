@@ -178,6 +178,13 @@ export const whatsappMicroservice = {
     unwrap(httpClient.post(`/campaigns/${campaignId}/resume`)),
   deleteCampaign: (campaignId) =>
     unwrap(httpClient.delete(`/campaigns/${campaignId}`)),
+
+  // Reports endpoints
+  getOperatorsReport: (params) => unwrap(httpClient.get("/reports/operators", { params })),
+  getConversationsReport: (params) => unwrap(httpClient.get("/reports/conversations", { params })),
+  getOperatorProductivity: (params) => unwrap(httpClient.get("/reports/operators/productivity", { params })),
+  getConversationsByPeriod: (params) => unwrap(httpClient.get("/reports/conversations/by-period", { params })),
+  getConversationsByTabulation: (params) => unwrap(httpClient.get("/reports/conversations/by-tabulation", { params })),
 };
 
 export const getActiveMicroserviceApiKey = () => activeApiKey;
